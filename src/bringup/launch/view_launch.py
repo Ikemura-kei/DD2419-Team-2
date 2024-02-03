@@ -16,11 +16,15 @@ def generate_launch_description():
     bringup_dir = get_package_share_directory('bringup')
     rviz_config = 'rviz/basic.rviz'
     lidar_launch = 'launch/lidar_launch.py'
-    included_launch = IncludeLaunchDescription(PythonLaunchDescriptionSource(os.path.join(bringup_dir, lidar_launch)))
+    realsense_launch = 'launch/realsense_launch.py'
+    lidar_launch = IncludeLaunchDescription(PythonLaunchDescriptionSource(os.path.join(bringup_dir, lidar_launch)))
+    realsense_launch = IncludeLaunchDescription(PythonLaunchDescriptionSource(os.path.join(bringup_dir, realsense_launch)))
     
     rviz_config = os.path.join(bringup_dir, rviz_config)
     rviz_node = Node(executable='rviz2', package='rviz2', arguments=['-d', rviz_config])
+
     return LaunchDescription([
-        included_launch,
+        lidar_launch,
+        realsense_launch,
         rviz_node
     ])
