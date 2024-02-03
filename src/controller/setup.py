@@ -22,7 +22,6 @@ setup(
         'console_scripts': [
             'open_loop_controller = controller.open_loop_controller:main',
             'cartesian_controller = controller.cartesian_controller:main',
-            'joy_controller = controller.joy_controller:main'
         ],
     },
 )
