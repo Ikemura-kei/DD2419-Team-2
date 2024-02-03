@@ -19,7 +19,6 @@ def generate_launch_description():
     included_launch = IncludeLaunchDescription(PythonLaunchDescriptionSource(os.path.join(bringup_dir, lidar_launch)))
     
     rviz_config = os.path.join(bringup_dir, rviz_config)
-    print(rviz_config)
     rviz_node = Node(executable='rviz2', package='rviz2', arguments=['-d', rviz_config])
     return LaunchDescription([
         included_launch,
