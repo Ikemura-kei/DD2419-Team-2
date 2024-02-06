@@ -68,8 +68,8 @@ class Detection(Node):
         o3d_point_cloud.points = o3d.utility.Vector3dVector(xyz)
         o3d_point_cloud.colors = o3d.utility.Vector3dVector(rgb)
 
-        # Downsample the point cloud to 5 cm
-        ds_o3d_point_cloud = o3d_point_cloud.voxel_down_sample(voxel_size=0.05)
+        # Downsample the point cloud to 0.5 cm
+        ds_o3d_point_cloud = o3d_point_cloud.voxel_down_sample(voxel_size=0.005) #
 
         # Convert Open3D -> NumPy
         points = np.asarray(ds_o3d_point_cloud.points)
@@ -82,7 +82,7 @@ class Detection(Node):
         blue_object_color = (0, 90, 130)
         dist_threshold = 0.5  
         red_tolerance = 50
-        green_tolerance = 40
+        green_tolerance = 50
         blue_tolerance = 50
 
         red_color_differences =np.abs( np.linalg.norm(colors - red_object_color, axis=1))
