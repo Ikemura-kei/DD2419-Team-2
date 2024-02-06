@@ -3,3 +3,4 @@ build/
 log/
 bags/*.zip
 bags/rosbag2*/
+*.pyc
