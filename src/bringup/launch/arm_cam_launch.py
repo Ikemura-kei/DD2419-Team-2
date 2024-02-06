@@ -28,7 +28,10 @@ def generate_launch_description():
     name='arm_cam'
     param_file = Path(USB_CAM_DIR, 'configs', 'arm_cam_ros_params.yaml')
     
-    return LaunchDescription([Node(
+    # -- below is a shameless hack, please change this to arm forward kinematics later --
+    baselink_2_arm_cam_tf = Node(executable='static_transform_publisher', package='tf2_ros', arguments=['--child-frame-id', 'arm_camera', '--frame-id', 'base_link'])
+    
+    return LaunchDescription([baselink_2_arm_cam_tf, Node(
             package='usb_cam', executable='usb_cam_node_exe', output='screen',
             name=name,
             namespace='',

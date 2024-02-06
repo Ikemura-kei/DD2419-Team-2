@@ -3,7 +3,7 @@
       video_device: "/dev/video0" # TODO: ensure this is fixed to the physical device
       framerate: 30.0
       io_method: "mmap"
-      frame_id: "camera"
+      frame_id: "arm_camera"
       pixel_format: "yuyv"  # see usb_cam/supported_formats for list of supported formats
       av_device_format: "YUV422P"
       image_width: 640
