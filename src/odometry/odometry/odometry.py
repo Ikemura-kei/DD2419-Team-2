@@ -46,14 +46,6 @@ class Odometry(Node):
         self.last_time = None
 
     def encoder_callback(self, msg: Encoders):
-        """Takes encoder readings and updates the odometry.
-        This function is called every time the encoders are updated (i.e., when a message is published on the '/motor/encoders' topic).
-        Your task is to update the odometry based on the encoder data in 'msg'. You are allowed to add/change things outside this function.
-        Keyword arguments:
-        msg -- An encoders ROS message. To see more information about it 
-        run 'ros2 interface show robp_interfaces/msg/Encoders' in a terminal.
-        """
-
         # The kinematic parameters for the differential configuration
         if self.last_time is None:
             self.last_time = msg.header.stamp
