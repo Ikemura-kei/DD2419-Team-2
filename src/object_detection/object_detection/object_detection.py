@@ -8,6 +8,10 @@ import rclpy
 from rclpy.node import Node
 
 from sensor_msgs.msg import PointCloud2
+from geometry_msgs.msg import PointStamped
+from visualization_msgs.msg import Marker, MarkerArray
+
+
 import sensor_msgs_py.point_cloud2 as pc2
 from open3d import open3d as o3d
 
@@ -26,12 +30,18 @@ class Detection(Node):
 
         # Initialize the publisher
         self._pub = self.create_publisher(
-            PointCloud2, '/camera/depth/color/ds_points', 10)
+            PointCloud2, '/camera/depth/color/ds_points', 100)
 
         # Subscribe to point cloud topic and call callback function on each recieved message
         self.create_subscription(
             PointCloud2, '/camera/depth/color/points', self.cloud_callback, 10)
         
+        # Create a publisher for center points
+        self._center_pub = self.create_publisher(
+            MarkerArray, '/object_centers', 10)
+        
+        self.marker_id_counter = 0 
+
 
     def cloud_callback(self, msg: PointCloud2):
         """Takes point cloud readings to detect objects.
@@ -68,8 +78,8 @@ class Detection(Node):
         o3d_point_cloud.points = o3d.utility.Vector3dVector(xyz)
         o3d_point_cloud.colors = o3d.utility.Vector3dVector(rgb)
 
-        # Downsample the point cloud to 0.5 cm
-        ds_o3d_point_cloud = o3d_point_cloud.voxel_down_sample(voxel_size=0.005) #
+        # Downsample the point cloud to 5 cm
+        ds_o3d_point_cloud = o3d_point_cloud.voxel_down_sample(voxel_size=0.005)
 
         # Convert Open3D -> NumPy
         points = np.asarray(ds_o3d_point_cloud.points)
@@ -81,8 +91,8 @@ class Detection(Node):
         green_object_color = (0, 70, 60)
         blue_object_color = (0, 90, 130)
         dist_threshold = 0.5  
-        red_tolerance = 50
-        green_tolerance = 50
+        red_tolerance = 45
+        green_tolerance = 40
         blue_tolerance = 50
 
         red_color_differences =np.abs( np.linalg.norm(colors - red_object_color, axis=1))
@@ -93,23 +103,36 @@ class Detection(Node):
         RED = '\033[91m'
         BLUE = '\033[36m'#'\033[34m'
         RESET = '\033[0m'
+
         filtered_points = []
 
+        filtered_points_dictionary = {
+            'red': [],
+            'green': [],
+            'blue': [],
+        }
+
         for i in range(len(colors)):
+           
+
             dist = np.sqrt(points[i][0]**2 + points[i][1]**2 + points[i][2]**2)
 
             if red_color_differences[i] < red_tolerance and dist < dist_threshold:
-                self.get_logger().info(RED +f"Red Object detected! "+ RESET)
+                self.get_logger().info(RED +f"_Red Object detected"+ RESET)
                 filtered_points.append([points[i][0], points[i][1], points[i][2], colors[i][0], colors[i][1], colors[i][2]])
+                filtered_points_dictionary['red'].append([points[i][0], points[i][1], points[i][2], colors[i][0], colors[i][1], colors[i][2]])
 
             if green_color_differences[i] < green_tolerance and dist < dist_threshold:
-                self.get_logger().info(GREEN+f"Green Object detected! "+ RESET)
+                self.get_logger().info(GREEN+f"_Green Object detected"+ RESET)
                 filtered_points.append([points[i][0], points[i][1], points[i][2], colors[i][0], colors[i][1], colors[i][2]])
-            
+                filtered_points_dictionary['green'].append([points[i][0], points[i][1], points[i][2], colors[i][0], colors[i][1], colors[i][2]])
+
+
             if blue_color_differences[i] < blue_tolerance and dist < dist_threshold: 
-                self.get_logger().info(BLUE+f"Blue Object detected! "+ RESET)
+                self.get_logger().info(BLUE+f"_Blue Object detected"+ RESET)
                 filtered_points.append([points[i][0], points[i][1], points[i][2], colors[i][0], colors[i][1], colors[i][2]])
-        
+                filtered_points_dictionary['blue'].append([points[i][0], points[i][1], points[i][2], colors[i][0], colors[i][1], colors[i][2]])
+
         if filtered_points:
             # Create a new PointCloud2 message with filtered data
             filtered_pc2_msg = PointCloud2()
@@ -141,6 +164,44 @@ class Detection(Node):
             # Publish the filtered PointCloud2 message
             self._pub.publish(filtered_pc2_msg)
 
+
+            object_centers = []
+
+            for color, points_list in filtered_points_dictionary.items():
+
+                # Calculate the center point of all detected objects
+                center_x = np.mean([point[0] for point in points_list])
+                center_y = np.mean([point[1] for point in points_list])
+                center_z = np.mean([point[2] for point in points_list])
+
+                if  not np.isnan(center_x) and not np.isinf(center_x) and \
+                    not np.isnan(center_y) and not np.isinf(center_y) and \
+                    not np.isnan(center_z) and not np.isinf(center_z):
+
+                    marker = Marker()
+                    marker.header = msg.header
+                    marker.type = Marker.SPHERE
+                    marker.action = Marker.ADD
+    
+                    marker.pose.position.x = center_x
+                    marker.pose.position.y = center_y
+                    marker.pose.position.z = center_z
+                    marker.scale.x = 0.01  # Adjust the scale as needed
+                    marker.scale.y = 0.01
+                    marker.scale.z = 0.01
+                    marker.color.r = 1.0  # Set the color (you can customize)
+                    marker.color.g = 1.0
+                    marker.color.b = 1.0
+                    marker.color.a = 1.0  # Set the alpha (transparency)
+                    marker.ns = color+"_cube"  # Set a unique namespace for object with each color
+                    marker.id = self.marker_id_counter  # Use the marker_id_counter as a unique ID
+                    self.marker_id_counter += 1  # Increment the marker ID counter
+
+                    object_centers.append(marker)
+
+
+                marker_array_msg = MarkerArray(markers=object_centers)
+                self._center_pub.publish(marker_array_msg)
 
 
 def main():
