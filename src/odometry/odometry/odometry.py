@@ -1,9 +1,3 @@
-def main():
-    print('Hi from odometry.')
-
-
-if __name__ == '__main__':
-    main()
 #!/usr/bin/env python
 
 import math
@@ -14,7 +8,7 @@ import rclpy
 from rclpy.node import Node
 
 from tf2_ros import TransformBroadcaster
-from tf_transformations import quaternion_from_euler, euler_from_quaternion
+from tf_transformations import quaternion_from_euler
 
 from geometry_msgs.msg import TransformStamped
 from robp_interfaces.msg import Encoders
@@ -23,6 +17,11 @@ from geometry_msgs.msg import PoseStamped
 
 
 class Odometry(Node):
+    # --------------------------------
+    # -- robot kinematic parameters --
+    # --------------------------------
+    WHEEL_RADIUS = 9.8 * 0.01 / 2 # m
+    WHEEL_SEPARATION = 31 * 0.01 # m
 
     def __init__(self):
         super().__init__('odometry')
@@ -43,6 +42,8 @@ class Odometry(Node):
         self._x = 0.0
         self._y = 0.0
         self._yaw = 0.0
+        
+        self.last_time = None
 
     def encoder_callback(self, msg: Encoders):
         """Takes encoder readings and updates the odometry.
@@ -54,11 +55,19 @@ class Odometry(Node):
         """
 
         # The kinematic parameters for the differential configuration
-        dt = 50 / 1000
+        if self.last_time is None:
+            self.last_time = msg.header.stamp
+            return
+        
+        cur_t = msg.header.stamp.sec + msg.header.stamp.nanosec / 1e9
+        last_t = self.last_time.sec + self.last_time.nanosec / 1e9
+        dt = (cur_t - last_t)
+        self.last_time = msg.header.stamp
+        
         ticks_per_rev = 48 * 64
-        wheel_radius = 0.04921
+        wheel_radius = self.WHEEL_RADIUS
         # if angle too big: shrink base, else: grow base. Best value: 0.312
-        base = 0.312
+        base = self.WHEEL_SEPARATION
 
         # Ticks since last message
         delta_ticks_left = msg.delta_encoder_left
