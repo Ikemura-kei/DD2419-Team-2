@@ -22,6 +22,7 @@ setup(
         'console_scripts': [
             'open_loop_controller = controller.open_loop_controller:main',
             'cartesian_controller = controller.cartesian_controller:main',
+            'target_position_controller = controller.target_position_controller:main'
         ],
     },
 )
