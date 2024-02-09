@@ -235,6 +235,7 @@ class Object_classifier(Node):
                     cv_image = cv2.putText(cv_image, bb_msg.category_name, (start_point[0]-10, start_point[1]-10), cv2.FONT_HERSHEY_SIMPLEX, 
                     1, color, thickness, cv2.LINE_AA)
                     imgMsg = self.bridge.cv2_to_imgmsg(cv_image, "rgb8")
+                    print("Image with bounding_boxes published! ")
                     self.image_bb_pub.publish(imgMsg)
                     
                     
