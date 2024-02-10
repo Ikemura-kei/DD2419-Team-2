@@ -4,7 +4,7 @@
 This is a package provides functionalities to detect various objects appearing in the DD2419 course project task, including boxes, cubes, dolls, etc.
 
 ## 2. Nodes
-This package ...
+
 #### 2.1 `display_markers`
 This node receives the detected ArUco markers and publish a visualization marker for each detected ArUco.
 
