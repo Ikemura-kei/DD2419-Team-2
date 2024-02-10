@@ -6,7 +6,7 @@ import numpy as np
 
 import rclpy
 from rclpy.node import Node
-
+from tf2_ros import TransformException
 from sensor_msgs.msg import PointCloud2
 from geometry_msgs.msg import PointStamped
 from visualization_msgs.msg import Marker, MarkerArray
@@ -17,6 +17,8 @@ from open3d import open3d as o3d
 
 import ctypes
 import struct
+from tf2_ros.buffer import Buffer
+from tf2_ros.transform_listener import TransformListener
 
 import sys
 from sensor_msgs.msg import PointField  
@@ -39,6 +41,10 @@ class Detection(Node):
         # Create a publisher for center points
         self._center_pub = self.create_publisher(
             MarkerArray, '/object_centers', 10)
+        
+        self.tf_buffer = Buffer(rclpy.duration.Duration(seconds=100.0))
+        self.tf_listener = TransformListener(self.tf_buffer, self)
+
         
         self.marker_id_counter = 0 
         
@@ -171,12 +177,24 @@ class Detection(Node):
 
                     marker = Marker()
                     marker.header = msg.header
-                    marker.type = Marker.SPHERE
+                    marker.header.frame_id = 'odom'
+                    marker.type = Marker.CUBE
                     marker.action = Marker.ADD
-    
-                    marker.pose.position.x = center_z + 0.08987
-                    marker.pose.position.y = -center_x + 0.0175
-                    marker.pose.position.z = -center_y + 0.10456
+
+                    try:
+                        t = self.tf_buffer.lookup_transform(
+                            'odom', 
+                            msg.header.frame_id,
+                            rclpy.time.Time())
+                        
+                    except TransformException as ex:
+                            self.get_logger().info(
+                                f'Could not transform: {ex}')
+                            return
+                    
+                    marker.pose.position.x = t.transform.translation.x + center_z
+                    marker.pose.position.y = t.transform.translation.y - center_x 
+                    marker.pose.position.z = t.transform.translation.z - center_y 
                     marker.scale.x = 0.01  # Adjust the scale as needed
                     marker.scale.y = 0.01
                     marker.scale.z = 0.01
