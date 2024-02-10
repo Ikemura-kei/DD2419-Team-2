@@ -18,9 +18,10 @@ class TargetPositionController(Node):
     target_y = 1.0
     
     linear_vel = 0.2
-    alpha = 0.1
+    alpha = 1.0
     # Define a threshold for stopping distance
     stopping_distance_threshold = 0.1
+    angular_threshold = 0.1
     angle_threshold = 0.1
 
     def __init__(self):
@@ -59,39 +60,51 @@ class TargetPositionController(Node):
         stamp = rclpy.time.Time()
         
         if self.tf2Buffer.can_transform(parent_frame, child_frame, stamp) == 0:
-            # TODO: error handling?
             return
             
         transform = self.tf2Buffer.lookup_transform(parent_frame, child_frame, stamp)
         robot_x = transform.transform.translation.x
         robot_y = transform.transform.translation.y
-        self.get_logger().info('Robots angle: %f x and %f y %f z and %f w' % ( transform.transform.rotation.x, transform.transform.rotation.y, transform.transform.rotation.z, transform.transform.rotation.w))
+        
+        # Calculate the rotation angle around the z-axis
+        robot_orientation = 2 * math.atan2(transform.transform.rotation.z, transform.transform.rotation.w)
+    
+        # Ensure the angle is in the range [-pi, pi]
+        if robot_orientation > math.pi:
+            robot_orientation -= 2 * math.pi
+        elif robot_orientation < -math.pi:
+            robot_orientation += 2 * math.pi
+        
         # Compute the target orientation angle
         twist_msg = Twist()
         
         distance_x = self.target_x-robot_x
         distance_y = self.target_y-robot_y
         
-        target_orientation = transform.transform.rotation.y-math.atan2(self.target_y, self.target_x)
+        self.get_logger().info('Compute target orientation: robot rotation: %f; orientation object: %f' % ( robot_orientation, math.atan2(self.target_y, self.target_x)))
+        target_orientation = robot_orientation-math.atan2(self.target_y, self.target_x)
         
         distance_to_target = math.sqrt(distance_x**2 + distance_y**2)
-        self.get_logger().info('Distance to target: %f distance_to_target and %f target_orientation' % ( distance_to_target, target_orientation))
+        
+        self.get_logger().info('\033[36mDISTANCE TO TARGET: %f\033[0m' % (distance_to_target))
         # Compute desired angular velocity using a proportional controller
         angular_velocity = self.alpha * target_orientation
         
         # Check if the robot is close to the target
+        if abs(target_orientation) <= self.angular_threshold:
+            twist_msg.angular.z = 0.0 
+        else:
+            twist_msg.angular.z = angular_velocity 
+        
         if distance_to_target <= self.stopping_distance_threshold:
             # Set linear velocity to zero to stop the robot
             twist_msg.linear.x = 0.0
-            twist_msg.angular.z = 0.0 
         else:
             twist_msg.linear.x = self.linear_vel
-            twist_msg.angular.z = angular_velocity 
             
         
         # TO TEST: Publish the DutyCycles message
         self._pub.publish(twist_msg)
-        self.get_logger().info('Published twist: %f linear and %f angular' % ( twist_msg.linear.x, twist_msg.angular.z))
 
 def main():
     rclpy.init()

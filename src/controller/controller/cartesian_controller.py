@@ -55,7 +55,7 @@ class CartesianController(Node):
         msg = DutyCycles()
 
         msg.duty_cycle_left = self.motion(self.alpha_l, self.beta_l, self.gamma_l, False)
-        msg.duty_cycle_right = self.motion(self.alpha_r, self.beta_r, self.gamma_r) * 0.89
+        msg.duty_cycle_right = self.motion(self.alpha_r, self.beta_r, self.gamma_r)*0.85
         self.publisher_.publish(msg)
         #self.get_logger().info('Publishing: {} and {}'.format(msg.duty_cycle_left,msg.duty_cycle_right))
     
@@ -82,7 +82,7 @@ class CartesianController(Node):
             self.d_error_r = (error - self.prev_error_r)/self.dt
             self.prev_error_r = error
 
-            pwm = (a * error) + (b * self.int_error_r) * (c * self.d_error_l)
+            pwm = (a * error) + (b * self.int_error_r) + (c * self.d_error_l)
             pwm = min(max(pwm,-100), 100)/100
             self.get_logger().info('error right: {} and int r:{}'.format(error,self.int_error_r))
         else: #left motor
