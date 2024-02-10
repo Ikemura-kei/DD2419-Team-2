@@ -14,7 +14,7 @@ import math
 
 class TargetPositionController(Node):
     # Target position
-    target_x = 1.0
+    target_x = 0.0
     target_y = 1.0
     
     linear_vel = 0.2
@@ -81,7 +81,6 @@ class TargetPositionController(Node):
         distance_x = self.target_x-robot_x
         distance_y = self.target_y-robot_y
         
-        self.get_logger().info('Compute target orientation: robot rotation: %f; orientation object: %f' % ( robot_orientation, math.atan2(self.target_y, self.target_x)))
         target_orientation = robot_orientation-math.atan2(self.target_y, self.target_x)
         
         distance_to_target = math.sqrt(distance_x**2 + distance_y**2)
