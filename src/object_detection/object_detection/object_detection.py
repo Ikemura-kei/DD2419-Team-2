@@ -41,21 +41,17 @@ class Detection(Node):
             MarkerArray, '/object_centers', 10)
         
         self.marker_id_counter = 0 
+        
+        self.red_object_color = (150, 40, 20)
+        self.green_object_color = (0, 70, 60)
+        self.blue_object_color = (0, 90, 130)
+        self.red_tolerance = 45
+        self.green_tolerance = 40
+        self.blue_tolerance = 50
+        self.dist_threshold = 1.0 
 
 
     def cloud_callback(self, msg: PointCloud2):
-        """Takes point cloud readings to detect objects.
-
-        This function is called for every message that is published 
-        on the '/camera/depth/color/points' topic.
-
-        Your task is to use the point cloud data in 'msg' to detect 
-        objects. You are allowed to add/change things outside this function.
-
-        Keyword arguments:
-        msg -- A point cloud ROS message. To see more information about it 
-        run 'ros2 interface show sensor_msgs/msg/PointCloud2' in a terminal.
-        """
 
         # Convert ROS -> NumPy
         gen = pc2.read_points_numpy(msg, skip_nans=True)
@@ -85,19 +81,10 @@ class Detection(Node):
         points = np.asarray(ds_o3d_point_cloud.points)
         raw_colors = np.asarray(ds_o3d_point_cloud.colors)
         colors = (raw_colors * 255).astype(np.uint8)
-
-        # output log anout object detection
-        red_object_color = (150, 40, 20)
-        green_object_color = (0, 70, 60)
-        blue_object_color = (0, 90, 130)
-        dist_threshold = 0.5  
-        red_tolerance = 45
-        green_tolerance = 40
-        blue_tolerance = 50
-
-        red_color_differences =np.abs( np.linalg.norm(colors - red_object_color, axis=1))
-        green_color_differences =np.abs( np.linalg.norm(colors - green_object_color, axis=1))
-        blue_color_differences =np.abs( np.linalg.norm(colors - blue_object_color, axis=1))
+ 
+        red_color_differences =np.abs( np.linalg.norm(colors - self.red_object_color, axis=1))
+        green_color_differences =np.abs( np.linalg.norm(colors - self.green_object_color, axis=1))
+        blue_color_differences =np.abs( np.linalg.norm(colors - self.blue_object_color, axis=1))
         
         GREEN = '\033[92m'
         RED = '\033[91m'
@@ -117,18 +104,19 @@ class Detection(Node):
 
             dist = np.sqrt(points[i][0]**2 + points[i][1]**2 + points[i][2]**2)
 
-            if red_color_differences[i] < red_tolerance and dist < dist_threshold:
+
+            if red_color_differences[i] < self.red_tolerance and dist < self.dist_threshold:
                 self.get_logger().info(RED +f"_Red Object detected"+ RESET)
                 filtered_points.append([points[i][0], points[i][1], points[i][2], colors[i][0], colors[i][1], colors[i][2]])
                 filtered_points_dictionary['red'].append([points[i][0], points[i][1], points[i][2], colors[i][0], colors[i][1], colors[i][2]])
 
-            if green_color_differences[i] < green_tolerance and dist < dist_threshold:
+            if green_color_differences[i] < self.green_tolerance and dist < self.dist_threshold:
                 self.get_logger().info(GREEN+f"_Green Object detected"+ RESET)
                 filtered_points.append([points[i][0], points[i][1], points[i][2], colors[i][0], colors[i][1], colors[i][2]])
                 filtered_points_dictionary['green'].append([points[i][0], points[i][1], points[i][2], colors[i][0], colors[i][1], colors[i][2]])
 
 
-            if blue_color_differences[i] < blue_tolerance and dist < dist_threshold: 
+            if blue_color_differences[i] < self.blue_tolerance and dist < self.dist_threshold: 
                 self.get_logger().info(BLUE+f"_Blue Object detected"+ RESET)
                 filtered_points.append([points[i][0], points[i][1], points[i][2], colors[i][0], colors[i][1], colors[i][2]])
                 filtered_points_dictionary['blue'].append([points[i][0], points[i][1], points[i][2], colors[i][0], colors[i][1], colors[i][2]])
@@ -164,7 +152,10 @@ class Detection(Node):
             # Publish the filtered PointCloud2 message
             self._pub.publish(filtered_pc2_msg)
 
+            self.publish_object_centers(filtered_points_dictionary, msg)
 
+    def publish_object_centers(self, filtered_points_dictionary, msg):
+            
             object_centers = []
 
             for color, points_list in filtered_points_dictionary.items():
@@ -183,9 +174,9 @@ class Detection(Node):
                     marker.type = Marker.SPHERE
                     marker.action = Marker.ADD
     
-                    marker.pose.position.x = center_x
-                    marker.pose.position.y = center_y
-                    marker.pose.position.z = center_z
+                    marker.pose.position.x = center_z + 0.08987
+                    marker.pose.position.y = -center_x + 0.0175
+                    marker.pose.position.z = -center_y + 0.10456
                     marker.scale.x = 0.01  # Adjust the scale as needed
                     marker.scale.y = 0.01
                     marker.scale.z = 0.01
@@ -198,7 +189,6 @@ class Detection(Node):
                     self.marker_id_counter += 1  # Increment the marker ID counter
 
                     object_centers.append(marker)
-
 
                 marker_array_msg = MarkerArray(markers=object_centers)
                 self._center_pub.publish(marker_array_msg)
