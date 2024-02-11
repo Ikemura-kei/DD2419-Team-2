@@ -10,7 +10,10 @@ from tf2_ros import TransformException
 from sensor_msgs.msg import PointCloud2
 from geometry_msgs.msg import PointStamped
 from visualization_msgs.msg import Marker, MarkerArray
+from builtin_interfaces.msg import Duration
 
+from sklearn.cluster import KMeans
+from scipy import stats
 
 import sensor_msgs_py.point_cloud2 as pc2
 from open3d import open3d as o3d
@@ -158,28 +161,31 @@ class Detection(Node):
             # Publish the filtered PointCloud2 message
             self._pub.publish(filtered_pc2_msg)
 
-            self.publish_object_centers(filtered_points_dictionary, msg)
+            self.culc_publish_object_centers(filtered_points_dictionary, msg)
 
-    def publish_object_centers(self, filtered_points_dictionary, msg):
+    def culc_publish_object_centers(self, filtered_points_dictionary, msg):
             
             object_centers = []
 
             for color, points_list in filtered_points_dictionary.items():
 
-                # Calculate the center point of all detected objects
-                center_x = np.mean([point[0] for point in points_list])
-                center_y = np.mean([point[1] for point in points_list])
-                center_z = np.mean([point[2] for point in points_list])
+                points_array = np.array([point[:3] for point in points_list])
 
-                if  not np.isnan(center_x) and not np.isinf(center_x) and \
-                    not np.isnan(center_y) and not np.isinf(center_y) and \
-                    not np.isnan(center_z) and not np.isinf(center_z):
+                filtered_points_array = self.remove_outliers_z_score(points_array)
+                
+                if len(filtered_points_array) > 0:  # Ensure there are points to process
+                    kmeans = KMeans(n_clusters=1, random_state=0, n_init=10).fit(filtered_points_array)
+                    centroid = kmeans.cluster_centers_[0]  # Extract the centroid coordinates
+
 
                     marker = Marker()
                     marker.header = msg.header
-                    marker.header.frame_id = 'odom'
-                    marker.type = Marker.CUBE
+                    #marker.header.frame_id = 'odom'
+                    marker.type = Marker.SPHERE
                     marker.action = Marker.ADD
+                    center_x = centroid[0]
+                    center_y = centroid[1]
+                    center_z = centroid[2]
 
                     try:
                         t = self.tf_buffer.lookup_transform(
@@ -195,6 +201,7 @@ class Detection(Node):
                     marker.pose.position.x = t.transform.translation.x + center_z
                     marker.pose.position.y = t.transform.translation.y - center_x 
                     marker.pose.position.z = t.transform.translation.z - center_y 
+                    marker.lifetime = Duration(sec=1, nanosec=0)
                     marker.scale.x = 0.01  # Adjust the scale as needed
                     marker.scale.y = 0.01
                     marker.scale.z = 0.01
@@ -202,7 +209,7 @@ class Detection(Node):
                     marker.color.g = 1.0
                     marker.color.b = 1.0
                     marker.color.a = 1.0  # Set the alpha (transparency)
-                    marker.ns = color+"_cube"  # Set a unique namespace for object with each color
+                    marker.ns = color+"_cube_centroid"  # Set a unique namespace for object with each color
                     marker.id = self.marker_id_counter  # Use the marker_id_counter as a unique ID
                     self.marker_id_counter += 1  # Increment the marker ID counter
 
@@ -210,6 +217,27 @@ class Detection(Node):
 
                 marker_array_msg = MarkerArray(markers=object_centers)
                 self._center_pub.publish(marker_array_msg)
+
+
+    def remove_outliers_z_score(self, points_array, threshold=1.5):
+            # Ensure points_array is at least 2-dimensional
+        if points_array.ndim == 1:
+            # Handle the case where points_array might be 1-dimensional
+            points_array = points_array.reshape(-1, 1)
+        elif points_array.size == 0:
+            # If points_array is empty, directly return it without further processing
+            return points_array
+
+        # Proceed with calculating Z-scores and filtering
+        z_scores = np.abs(stats.zscore(points_array, axis=0))
+        
+        # Check if z_scores calculation returned an empty or invalid result
+        if z_scores.size == 0 or z_scores.ndim < 2:
+            return np.array([]).reshape(-1, points_array.shape[1])
+
+        filtered_points = points_array[(z_scores < threshold).all(axis=1)]
+        return filtered_points
+
 
 
 def main():
