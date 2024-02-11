@@ -180,7 +180,7 @@ class Detection(Node):
 
                     marker = Marker()
                     marker.header = msg.header
-                    #marker.header.frame_id = 'odom'
+                    marker.header.frame_id = 'odom'
                     marker.type = Marker.SPHERE
                     marker.action = Marker.ADD
                     center_x = centroid[0]
