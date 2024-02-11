@@ -1,6 +1,7 @@
 from sensor_msgs.msg import PointCloud2
 import sensor_msgs_py.point_cloud2 as pc2
 from geometry_msgs.msg import Twist
+from sensor_msgs.msg import Joy
 
 from tf2_ros.buffer import Buffer
 from tf2_ros.transform_listener import TransformListener
@@ -14,19 +15,19 @@ import math
 
 class TargetPositionController(Node):
     # Target position
-    target_x = 0.0
+    target_x = 2.0
     target_y = 1.0
     
-    linear_vel = 0.2
-    alpha = 1.0
+    linear_vel = 1.5
+    alpha = 5.25
     # Define a threshold for stopping distance
     stopping_distance_threshold = 0.1
-    angular_threshold = 0.1
+    angular_threshold = 0.05
     angle_threshold = 0.1
 
     def __init__(self):
         super().__init__('target_position_controller')
-        
+        self.stop = False
         # Initialize the transform listener and assign it a buffer
         self.tf2Buffer = Buffer(cache_time=None)
 
@@ -38,6 +39,8 @@ class TargetPositionController(Node):
         
         self._pub2 = self.create_publisher(
             PointStamped, '/clicked_point', 10)
+        
+        self.joy_sub = self.create_subscription(Joy, '/joy', self.joy_command_cb, 10)
 
         # Timer to publish commands every 100 milliseconds (10 Hz)
         self.timer = self.create_timer(0.1, self.publish_twist)
@@ -52,6 +55,11 @@ class TargetPositionController(Node):
         
         self._pub2.publish(pointStamped)        
         
+    def joy_command_cb(self, msg:Joy):
+        if msg.buttons[1]: #set duty cycle to zero if red button pressed
+            self.stop = True
+        else:
+            self.stop = False
     
     def publish_twist(self):
         # Compute robot's position
@@ -101,7 +109,10 @@ class TargetPositionController(Node):
         else:
             twist_msg.linear.x = self.linear_vel
             
-        
+        if self.stop:
+             twist_msg.linear.x = 0.0
+             twist_msg.angular.z = 0.0
+             
         # TO TEST: Publish the DutyCycles message
         self._pub.publish(twist_msg)
 
