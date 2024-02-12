@@ -51,13 +51,13 @@ class Detection(Node):
         
         self.marker_id_counter = 0 
         
-        self.red_object_color = (150, 40, 20)
-        self.green_object_color = (0, 70, 60)
-        self.blue_object_color = (0, 90, 130)
-        self.red_tolerance = 45
-        self.green_tolerance = 40
-        self.blue_tolerance = 50
-        self.dist_threshold = 1.0 
+        self.RED_OBJECT_COLOR = (150, 40, 20)
+        self.GREEN_OBJECT_COLOR = (0, 70, 60)
+        self.BLUE_OBJECT_COLOR = (0, 90, 130)
+        self.RED_TOLERANCE = 45
+        self.GREEN_TOLERANCE = 40
+        self.BLUE_TOLERANCE = 50
+        self.DIST_THRESHOLD = 2.0 
 
 
     def cloud_callback(self, msg: PointCloud2):
@@ -91,9 +91,9 @@ class Detection(Node):
         raw_colors = np.asarray(ds_o3d_point_cloud.colors)
         colors = (raw_colors * 255).astype(np.uint8)
  
-        red_color_differences =np.abs( np.linalg.norm(colors - self.red_object_color, axis=1))
-        green_color_differences =np.abs( np.linalg.norm(colors - self.green_object_color, axis=1))
-        blue_color_differences =np.abs( np.linalg.norm(colors - self.blue_object_color, axis=1))
+        red_color_differences =np.abs( np.linalg.norm(colors - self.RED_OBJECT_COLOR, axis=1))
+        green_color_differences =np.abs( np.linalg.norm(colors - self.GREEN_OBJECT_COLOR, axis=1))
+        blue_color_differences =np.abs( np.linalg.norm(colors - self.BLUE_OBJECT_COLOR, axis=1))
         
         GREEN = '\033[92m'
         RED = '\033[91m'
@@ -114,18 +114,18 @@ class Detection(Node):
             dist = np.sqrt(points[i][0]**2 + points[i][1]**2 + points[i][2]**2)
 
 
-            if red_color_differences[i] < self.red_tolerance and dist < self.dist_threshold:
+            if red_color_differences[i] < self.RED_TOLERANCE and dist < self.DIST_THRESHOLD:
                 self.get_logger().info(RED +f"_Red Object detected"+ RESET)
                 filtered_points.append([points[i][0], points[i][1], points[i][2], colors[i][0], colors[i][1], colors[i][2]])
                 filtered_points_dictionary['red'].append([points[i][0], points[i][1], points[i][2], colors[i][0], colors[i][1], colors[i][2]])
 
-            if green_color_differences[i] < self.green_tolerance and dist < self.dist_threshold:
+            if green_color_differences[i] < self.GREEN_TOLERANCE and dist < self.DIST_THRESHOLD:
                 self.get_logger().info(GREEN+f"_Green Object detected"+ RESET)
                 filtered_points.append([points[i][0], points[i][1], points[i][2], colors[i][0], colors[i][1], colors[i][2]])
                 filtered_points_dictionary['green'].append([points[i][0], points[i][1], points[i][2], colors[i][0], colors[i][1], colors[i][2]])
 
 
-            if blue_color_differences[i] < self.blue_tolerance and dist < self.dist_threshold: 
+            if blue_color_differences[i] < self.BLUE_TOLERANCE and dist < self.DIST_THRESHOLD: 
                 self.get_logger().info(BLUE+f"_Blue Object detected"+ RESET)
                 filtered_points.append([points[i][0], points[i][1], points[i][2], colors[i][0], colors[i][1], colors[i][2]])
                 filtered_points_dictionary['blue'].append([points[i][0], points[i][1], points[i][2], colors[i][0], colors[i][1], colors[i][2]])
@@ -205,13 +205,13 @@ class Detection(Node):
                     marker.scale.x = 0.01  # Adjust the scale as needed
                     marker.scale.y = 0.01
                     marker.scale.z = 0.01
-                    marker.color.r = 1.0  # Set the color (you can customize)
+                    marker.color.r = 1.0  
                     marker.color.g = 1.0
                     marker.color.b = 1.0
-                    marker.color.a = 1.0  # Set the alpha (transparency)
+                    marker.color.a = 1.0  
                     marker.ns = color+"_cube_centroid"  # Set a unique namespace for object with each color
-                    marker.id = self.marker_id_counter  # Use the marker_id_counter as a unique ID
-                    self.marker_id_counter += 1  # Increment the marker ID counter
+                    marker.id = self.marker_id_counter  
+                    self.marker_id_counter += 1  
 
                     object_centers.append(marker)
 
