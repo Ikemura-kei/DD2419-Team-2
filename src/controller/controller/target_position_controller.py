@@ -2,6 +2,8 @@ from sensor_msgs.msg import PointCloud2
 import sensor_msgs_py.point_cloud2 as pc2
 from geometry_msgs.msg import Twist
 from sensor_msgs.msg import Joy
+from geometry_msgs.msg import Point, PoseStamped
+from tf2_geometry_msgs.tf2_geometry_msgs import do_transform_pose_stamped
 
 from tf2_ros.buffer import Buffer
 from tf2_ros.transform_listener import TransformListener
@@ -15,11 +17,11 @@ import math
 
 class TargetPositionController(Node):
     # Target position
-    target_x = 2.0
-    target_y = 1.0
+    target_x = None
+    target_y = None
     
-    linear_vel = 1.5
-    alpha = 5.25
+    linear_vel = 1.05
+    alpha = 8.25
     # Define a threshold for stopping distance
     stopping_distance_threshold = 0.1
     angular_threshold = 0.05
@@ -41,12 +43,34 @@ class TargetPositionController(Node):
             PointStamped, '/clicked_point', 10)
         
         self.joy_sub = self.create_subscription(Joy, '/joy', self.joy_command_cb, 10)
+        
+        self.goal_sub = self.create_subscription(Point, '/plan_goal', self.goal_cb, 10)
 
         # Timer to publish commands every 100 milliseconds (10 Hz)
         self.timer = self.create_timer(0.1, self.publish_twist)
         self.timer = self.create_timer(0.1, self.publish_point)
+        
+    def goal_cb(self, msg:Point):
+        stamp = rclpy.time.Time()
+        
+        transform_base2odom = self.tf2Buffer.lookup_transform('base_link', 'odom', stamp)
+        target_pose = PoseStamped()
+        target_pose.header.frame_id = 'base_link'
+        target_pose.header.stamp = stamp.to_msg()
+        target_pose.pose.position.x = msg.x
+        target_pose.pose.position.y = msg.y
+        target_pose.pose.orientation.w = 1.0
+        target_pose.pose.orientation.x = target_pose.pose.orientation.y = target_pose.pose.orientation.z = 0.0
+        target_pose = do_transform_pose_stamped(target_pose, transform_base2odom)
+        
+        self.target_x = target_pose.pose.position.x
+        self.target_y = target_pose.pose.position.y
+        
+        print("x: {}, y: {}".format(self.target_x, self.target_y))
     
     def publish_point(self):
+        if self.target_x is None or self.target_y is None:
+            return
         pointStamped = PointStamped()
         pointStamped.header.stamp = self.get_clock().now().to_msg()
         pointStamped.header.frame_id = 'odom'
@@ -62,6 +86,8 @@ class TargetPositionController(Node):
             self.stop = False
     
     def publish_twist(self):
+        if self.target_x is None or self.target_y is None:
+            return
         # Compute robot's position
         child_frame = 'base_link'
         parent_frame = 'odom'
@@ -73,6 +99,9 @@ class TargetPositionController(Node):
         transform = self.tf2Buffer.lookup_transform(parent_frame, child_frame, stamp)
         robot_x = transform.transform.translation.x
         robot_y = transform.transform.translation.y
+        
+        
+        # print(target_pose.pose.position)
         
         # Calculate the rotation angle around the z-axis
         robot_orientation = 2 * math.atan2(transform.transform.rotation.z, transform.transform.rotation.w)
@@ -89,7 +118,7 @@ class TargetPositionController(Node):
         distance_x = self.target_x-robot_x
         distance_y = self.target_y-robot_y
         
-        target_orientation = robot_orientation-math.atan2(self.target_y, self.target_x)
+        target_orientation = robot_orientation-math.atan2(distance_y, distance_x)
         
         distance_to_target = math.sqrt(distance_x**2 + distance_y**2)
         
@@ -106,6 +135,7 @@ class TargetPositionController(Node):
         if distance_to_target <= self.stopping_distance_threshold:
             # Set linear velocity to zero to stop the robot
             twist_msg.linear.x = 0.0
+            self.target_x = self.target_y = None
         else:
             twist_msg.linear.x = self.linear_vel
             
