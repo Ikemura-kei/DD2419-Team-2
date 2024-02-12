@@ -20,7 +20,8 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'open_loop_controller = arm_controller.open_loop_controller:main'
+            'open_loop_controller = arm_controller.open_loop_controller:main',
+            'joystick_controller = arm_controller.joystick_controller:main'
         ],
     },
 )

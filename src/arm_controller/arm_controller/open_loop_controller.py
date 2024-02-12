@@ -6,9 +6,19 @@ from std_msgs.msg import Int16MultiArray, MultiArrayDimension
 # "{layout: {dim: [{label: '', size: 0, stride: 0}], data_offset: 0}, data: [12000,12000,12000,12000,12000,12000,500,500,500,500,500,500]}"
 
 ANGLE_LIMITS_LOW = [4200, 3100, 3200, 3000, 3750, 1000]
-ANGLE_LIMITS_HIGH = [10650, 21500, 20500, 23000, 17050, 22000]
-ANGLE_HOMES = [10650, 12000, 12000, 12000, 12000, 12000]
+ANGLE_LIMITS_HIGH = [12050, 21500, 20500, 23000, 17050, 22000]
+ANGLE_HOMES = [4200, 12000, 12000, 12000, 12000, 12000]
+
+ANGLE_PICKUP = [4200, 12000, 12000, 20601, 6242, 12000]
+ANGLE_CLOSE_GRIPPER = [12050, 12000, 12000, 20601, 6242, 12000]
+ANGLE_HOME_OBJ = [12050, 12000, 12000, 12000, 12000, 12000]
+
+ANGLE_PLACE_DOWN = [12050, 12000, 12000, 20601, 6242, 12000]
+ANGLE_OPEN_GRIPPER = [4200, 12000, 12000, 20601, 6242, 12000]
+
 PERIOD = 0.1
+
+DELAY = 6000 #ms
 
 class OpenLoopController(Node):
     def __init__(self):
@@ -35,6 +45,15 @@ class OpenLoopController(Node):
         
         self.joint_pos_sub
         
+        #variables for pickup
+        self.pickup_pressed = False
+        self.gripper_closed = False
+        self.delay_time = self.get_clock().now()
+        
+        self.place_pressed = False
+        self.gripper_open = False
+        self.place_pressed_time = self.get_clock().now()
+        
     def joy_cb(self, msg:Joy):
         # axes: left-stick horizontal, left-stick verticle, LT, right-stick horizontal, right-stick verticle, RT, left-cross horizontal, left-cross verticle
         # buttons: A, B, X, Y, LB, RB, SACK, START
@@ -48,28 +67,90 @@ class OpenLoopController(Node):
             print('still initializing')
             return
         
-        if self.joy_cmd.buttons[5] < 1:
+        
+        #####################################################################################
+        # RED BUTTON -- Reset
+        #####################################################################################
+        if self.joy_cmd.buttons[1]: # red button is pressed
+            
+            self.gripper_closed = False
+            self.pickup_pressed = False
+            self.pickup_pressed = False
+            self.place_pressed = False
+            self.gripper_open = False
+            self.joint_angles = ANGLE_HOMES
+            self.joint_times = [DELAY] * 6
+            self.publish_joint_cmd(self.joint_angles, self.joint_times)
+            print("Resetting home")
             return
         
-        if self.joy_cmd.axes[2] > 0.999:
-            self.joy_cmd.axes[2] = 1
-        elif self.joy_cmd.axes[2] < -0.999:
-            self.joy_cmd.axes[2] = -1
-        self.joy_cmd.axes[2] = -self.joy_cmd.axes[2] + 1
-            
-        if self.joy_cmd.axes[5] > 0.999:
-            self.joy_cmd.axes[5] = 1
-        elif self.joy_cmd.axes[5] < -0.999:
-            self.joy_cmd.axes[5] = -1
-        self.joy_cmd.axes[5] = -self.joy_cmd.axes[5] + 1
         
-        self.joint_angles[5] += int(self.joy_cmd.axes[3] * 250) # right-stick horizontal
-        self.joint_angles[3] += int(self.joy_cmd.axes[4] * 70) # right-stick verticle
-        self.joint_angles[0] += int(self.joy_cmd.axes[1] * 300) # left-stick verticle
-        self.joint_angles[4] += int(self.joy_cmd.axes[2] * 35) - int(self.joy_cmd.axes[5] * 35) # LT & RT
-        self.joint_times = [90] * 6
+        #####################################################################################
+        # RED BUTTON -- Pick
+        #####################################################################################
             
-        self.publish_joint_cmd(self.joint_angles, self.joint_times)
+        if self.gripper_closed and ((self.get_clock().now() - self.delay_time).nanoseconds / 1e6 >= DELAY):
+            self.gripper_closed = False
+            self.joint_angles = ANGLE_HOME_OBJ
+            self.joint_times = [DELAY] * 6
+            self.publish_joint_cmd(self.joint_angles, self.joint_times)
+            print("Returning home with object")
+            return
+            
+        
+        if self.pickup_pressed and ((self.get_clock().now() - self.delay_time).nanoseconds / 1e6 >= DELAY):
+            self.pickup_pressed = False
+            self.gripper_closed = True
+            self.delay_time = self.get_clock().now()
+            self.joint_angles= ANGLE_CLOSE_GRIPPER
+            self.joint_times = [DELAY] * 6
+            self.publish_joint_cmd(self.joint_angles, self.joint_times)
+            print("Closing gripper")
+            return
+            
+        if self.joy_cmd.buttons[0]: # green button is pressed (pickup!!!!!)
+            self.pickup_pressed = True
+            self.delay_time = self.get_clock().now()
+            self.joint_angles = ANGLE_PICKUP
+            self.joint_times = [DELAY] * 6
+            self.publish_joint_cmd(self.joint_angles, self.joint_times)
+            print("Moving arm down")
+            return
+        
+        
+        #####################################################################################
+        # BLUE BUTTON -- Place
+        #####################################################################################
+        
+        
+        if self.gripper_open and ((self.get_clock().now() - self.delay_time).nanoseconds / 1e6 >= DELAY):
+            self.gripper_open = False
+            self.joint_angles = ANGLE_HOMES
+            self.joint_times = [DELAY] * 6
+            self.publish_joint_cmd(self.joint_angles, self.joint_times)
+            print("Returning home")
+            return
+            
+        
+        if self.place_pressed and ((self.get_clock().now() - self.delay_time).nanoseconds / 1e6 >= DELAY):
+            self.place_pressed = False
+            self.gripper_open = True
+            self.delay_time = self.get_clock().now()
+            self.joint_angles= ANGLE_OPEN_GRIPPER
+            self.joint_times = [DELAY] * 6
+            self.publish_joint_cmd(self.joint_angles, self.joint_times)
+            print("Opening gripper")
+            return
+        
+        if self.joy_cmd.buttons[2]: # blue button is pressed (place!!!!!)
+            self.place_pressed = True
+            self.delay_time = self.get_clock().now()
+            self.joint_angles = ANGLE_PLACE_DOWN
+            self.joint_times = [DELAY] * 6
+            self.publish_joint_cmd(self.joint_angles, self.joint_times)
+            print("Moving arm down to place")
+            return
+        
         
     def joint_pos_cb(self, msg:JointState):
         assert len(msg.name) == 6
