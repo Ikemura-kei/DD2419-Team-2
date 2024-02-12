@@ -19,8 +19,10 @@ class CartesianController(Node):
         self.desired_wr = 0
         self.desired_wl = 0
         
-        self.radius = 0.0352
-        self.base = 0.23
+        self.correcting_term_r = 0.95
+        
+        self.radius = 9.8 * 0.01 / 2
+        self.base = 31 * 0.01
 
         self.actual_wr = 0
         self.actual_wl = 0
@@ -33,11 +35,12 @@ class CartesianController(Node):
         self.d_error_r = 0
         self.d_error_l = 0
         
-        self.alpha_r = 1.0
-        self.beta_r = .1
+        self.alpha_r = 0.75123
+        self.beta_r =  0
         self.gamma_r = 0
-        self.alpha_l = 1.0
-        self.beta_l = .1
+        
+        self.alpha_l = 0.75123
+        self.beta_l = 0
         self.gamma_l = 0
 
         timer_period = 0.1  # seconds
@@ -55,7 +58,7 @@ class CartesianController(Node):
         msg = DutyCycles()
 
         msg.duty_cycle_left = self.motion(self.alpha_l, self.beta_l, self.gamma_l, False)
-        msg.duty_cycle_right = self.motion(self.alpha_r, self.beta_r, self.gamma_r) * 0.89
+        msg.duty_cycle_right = self.motion(self.alpha_r, self.beta_r, self.gamma_r) * self.correcting_term_r
         self.publisher_.publish(msg)
         #self.get_logger().info('Publishing: {} and {}'.format(msg.duty_cycle_left,msg.duty_cycle_right))
     
@@ -82,7 +85,7 @@ class CartesianController(Node):
             self.d_error_r = (error - self.prev_error_r)/self.dt
             self.prev_error_r = error
 
-            pwm = (a * error) + (b * self.int_error_r) * (c * self.d_error_l)
+            pwm = (a * error) + (b * self.int_error_r) + (c * self.d_error_l)
             pwm = min(max(pwm,-100), 100)/100
             self.get_logger().info('error right: {} and int r:{}'.format(error,self.int_error_r))
         else: #left motor

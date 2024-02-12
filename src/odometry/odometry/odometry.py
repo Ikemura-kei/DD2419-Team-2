@@ -54,6 +54,10 @@ class Odometry(Node):
         cur_t = msg.header.stamp.sec + msg.header.stamp.nanosec / 1e9
         last_t = self.last_time.sec + self.last_time.nanosec / 1e9
         dt = (cur_t - last_t)
+        
+        if dt == 0:
+            return
+        
         self.last_time = msg.header.stamp
         
         ticks_per_rev = 48 * 64
