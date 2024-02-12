@@ -51,13 +51,13 @@ class Detection(Node):
         
         self.marker_id_counter = 0 
         
-        self.red_object_color = (150, 40, 20)
-        self.green_object_color = (0, 70, 60)
-        self.blue_object_color = (0, 90, 130)
-        self.red_tolerance = 45
-        self.green_tolerance = 40
-        self.blue_tolerance = 50
-        self.dist_threshold = 1.0 
+        self.RED_OBJECT_COLOR = (150, 40, 20)
+        self.GREEN_OBJECT_COLOR = (0, 70, 60)
+        self.BLUE_OBJECT_COLOR = (0, 90, 130)
+        self.RED_TOLERANCE = 45
+        self.GREEN_TOLERANCE = 40
+        self.BLUE_TOLERANCE = 50
+        self.DIST_THRESHOLD = 2.0 
 
 
     def cloud_callback(self, msg: PointCloud2):
@@ -205,13 +205,13 @@ class Detection(Node):
                     marker.scale.x = 0.01  # Adjust the scale as needed
                     marker.scale.y = 0.01
                     marker.scale.z = 0.01
-                    marker.color.r = 1.0  # Set the color (you can customize)
+                    marker.color.r = 1.0  
                     marker.color.g = 1.0
                     marker.color.b = 1.0
-                    marker.color.a = 1.0  # Set the alpha (transparency)
+                    marker.color.a = 1.0  
                     marker.ns = color+"_cube_centroid"  # Set a unique namespace for object with each color
-                    marker.id = self.marker_id_counter  # Use the marker_id_counter as a unique ID
-                    self.marker_id_counter += 1  # Increment the marker ID counter
+                    marker.id = self.marker_id_counter  
+                    self.marker_id_counter += 1  
 
                     object_centers.append(marker)
 
