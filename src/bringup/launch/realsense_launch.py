@@ -10,6 +10,6 @@ def generate_launch_description():
     realsense_path = get_package_share_directory('realsense2_camera')
     realsense_launch = IncludeLaunchDescription(PythonLaunchDescriptionSource(os.path.join(realsense_path, 'launch/rs_launch.py')), launch_arguments={'pointcloud.enable': 'true'}.items())
     
-    baselink_2_realsense_tf = Node(executable='static_transform_publisher', package='tf2_ros', arguments=['--child-frame-id', 'camera_link', '--frame-id', 'base_link'])
+    baselink_2_realsense_tf = Node(executable='static_transform_publisher', package='tf2_ros', arguments=['--child-frame-id', 'camera_link', '--frame-id', 'base_link', '--x', '0.17'])
     
     return LaunchDescription([realsense_launch, baselink_2_realsense_tf])
