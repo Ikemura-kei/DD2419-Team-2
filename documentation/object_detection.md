@@ -15,7 +15,14 @@ This node receives the detected ArUco markers and publish a visualization marker
 - `/aruco/markers`: `<aruco_msgs/msg/MarkerArray>`, the detected ArUcos, published by the aruco detection package.
 
 #### 2.2 `object_detection`
-This node ...
+This node filter the object's point clouds, culculate the the centriod of detected object and publish it.
+
+###### Published Topics
+- `/object_centers`: `<visualization_msgs/msg/MarkerArray>`, the markers of the detected objects convey their position infomation. 
+- `/camera/depth/color/ds_points`: `<sensor_msgs/msg/PointCloud2>`, the filtered point clouds which is used to visualize objects in RViz.
+
+###### Subscribed Topics
+- `/camera/depth/color/points`: `<sensor_msgs/msg/PointCloud2>`, the original point clouds detected by RGBD camera.
 
 ## 3. Launch Files
 #### 3.1 `aruco_detector_launch.py`
