@@ -67,16 +67,11 @@ class Detection(Node):
         xyz = gen[:,:3]
         rgb = np.empty(xyz.shape, dtype=np.uint32)
 
-        for idx, x in enumerate(gen):
-            c = x[3]
-            s = struct.pack('>f' , c)
-            i = struct.unpack('>l', s)[0]
-            pack = ctypes.c_uint32(i).value
-            rgb[idx, 0] = np.asarray((pack >> 16) & 255, dtype=np.uint8) 
-            rgb[idx, 1] = np.asarray((pack >> 8) & 255, dtype=np.uint8) 
-            rgb[idx, 2] = np.asarray(pack & 255, dtype=np.uint8)
-
-        rgb = rgb.astype(np.float32) / 255
+        packed_rgb = gen[:, 3].astype(np.float32).view(np.int32)
+        r = ((packed_rgb >> 16) & 255).astype(np.uint8)
+        g = ((packed_rgb >> 8) & 255).astype(np.uint8)
+        b = (packed_rgb & 255).astype(np.uint8)
+        rgb = np.stack([r, g, b], axis=-1).astype(np.float32) / 255
 
         # Convert NumPy -> Open3D
         o3d_point_cloud = o3d.geometry.PointCloud()    
@@ -108,27 +103,30 @@ class Detection(Node):
             'blue': [],
         }
 
-        for i in range(len(colors)):
-           
+        distances = np.linalg.norm(points, axis=1)
 
-            dist = np.sqrt(points[i][0]**2 + points[i][1]**2 + points[i][2]**2)
+        red_mask = (red_color_differences < self.RED_TOLERANCE) & (distances < self.DIST_THRESHOLD)
+        green_mask = (green_color_differences < self.GREEN_TOLERANCE) & (distances < self.DIST_THRESHOLD)
+        blue_mask = (blue_color_differences < self.BLUE_TOLERANCE) & (distances < self.DIST_THRESHOLD)
 
+        # Define a function to process detections
+        def process_detections(mask, color_name, color_code, log_message):
+            if np.any(mask):
+                self.get_logger().info(color_code + log_message + RESET)
+                selected_points = points[mask]
+                selected_colors = colors[mask]
+                
+                # Combine points and colors, then append them to the lists and dictionaries
+                for point, color in zip(selected_points, selected_colors):
+                    combined = np.concatenate((point, color)).tolist()
+                    filtered_points.append(combined)
+                    filtered_points_dictionary[color_name].append(combined)
 
-            if red_color_differences[i] < self.RED_TOLERANCE and dist < self.DIST_THRESHOLD:
-                self.get_logger().info(RED +f"_Red Object detected"+ RESET)
-                filtered_points.append([points[i][0], points[i][1], points[i][2], colors[i][0], colors[i][1], colors[i][2]])
-                filtered_points_dictionary['red'].append([points[i][0], points[i][1], points[i][2], colors[i][0], colors[i][1], colors[i][2]])
+        # Process detections for each color
+        process_detections(red_mask, 'red', RED, "_Red Object detected")
+        process_detections(green_mask, 'green', GREEN, "_Green Object detected")
+        process_detections(blue_mask, 'blue', BLUE, "_Blue Object detected")
 
-            if green_color_differences[i] < self.GREEN_TOLERANCE and dist < self.DIST_THRESHOLD:
-                self.get_logger().info(GREEN+f"_Green Object detected"+ RESET)
-                filtered_points.append([points[i][0], points[i][1], points[i][2], colors[i][0], colors[i][1], colors[i][2]])
-                filtered_points_dictionary['green'].append([points[i][0], points[i][1], points[i][2], colors[i][0], colors[i][1], colors[i][2]])
-
-
-            if blue_color_differences[i] < self.BLUE_TOLERANCE and dist < self.DIST_THRESHOLD: 
-                self.get_logger().info(BLUE+f"_Blue Object detected"+ RESET)
-                filtered_points.append([points[i][0], points[i][1], points[i][2], colors[i][0], colors[i][1], colors[i][2]])
-                filtered_points_dictionary['blue'].append([points[i][0], points[i][1], points[i][2], colors[i][0], colors[i][1], colors[i][2]])
 
         if filtered_points:
             # Create a new PointCloud2 message with filtered data
@@ -201,7 +199,8 @@ class Detection(Node):
                     marker.pose.position.x = t.transform.translation.x + center_z
                     marker.pose.position.y = t.transform.translation.y - center_x 
                     marker.pose.position.z = t.transform.translation.z - center_y 
-                    marker.lifetime = Duration(sec=1, nanosec=0)
+                    marker.lifetime = Duration(sec=0, nanosec=330000000)
+
                     marker.scale.x = 0.01  # Adjust the scale as needed
                     marker.scale.y = 0.01
                     marker.scale.z = 0.01
