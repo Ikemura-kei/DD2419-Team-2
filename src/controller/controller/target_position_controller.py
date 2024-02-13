@@ -21,9 +21,9 @@ class TargetPositionController(Node):
     target_y = None
     
     linear_vel = 1.05
-    alpha = 8.25
+    alpha = 4.75
     # Define a threshold for stopping distance
-    stopping_distance_threshold = 0.1
+    stopping_distance_threshold = 0.125
     angular_threshold = 0.05
     angle_threshold = 0.1
 
@@ -53,7 +53,7 @@ class TargetPositionController(Node):
     def goal_cb(self, msg:Point):
         stamp = rclpy.time.Time()
         
-        transform_base2odom = self.tf2Buffer.lookup_transform('base_link', 'odom', stamp)
+        transform_base2odom = self.tf2Buffer.lookup_transform('odom', 'base_link', stamp)
         target_pose = PoseStamped()
         target_pose.header.frame_id = 'base_link'
         target_pose.header.stamp = stamp.to_msg()
@@ -65,7 +65,7 @@ class TargetPositionController(Node):
         
         self.target_x = target_pose.pose.position.x
         self.target_y = target_pose.pose.position.y
-        
+        print("orig x: {}, orig y: {}".format(msg.x, msg.y))
         print("x: {}, y: {}".format(self.target_x, self.target_y))
     
     def publish_point(self):
