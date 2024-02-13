@@ -21,7 +21,7 @@ class TargetPositionController(Node):
     target_y = None
     
     linear_vel = 1.05
-    alpha = 4.75
+    alpha = 3.25
     # Define a threshold for stopping distance
     stopping_distance_threshold = 0.125
     angular_threshold = 0.05
@@ -62,7 +62,7 @@ class TargetPositionController(Node):
         target_pose.pose.orientation.w = 1.0
         target_pose.pose.orientation.x = target_pose.pose.orientation.y = target_pose.pose.orientation.z = 0.0
         target_pose = do_transform_pose_stamped(target_pose, transform_base2odom)
-        
+        self.goal_t = stamp
         self.target_x = target_pose.pose.position.x
         self.target_y = target_pose.pose.position.y
         print("orig x: {}, orig y: {}".format(msg.x, msg.y))
@@ -72,7 +72,7 @@ class TargetPositionController(Node):
         if self.target_x is None or self.target_y is None:
             return
         pointStamped = PointStamped()
-        pointStamped.header.stamp = self.get_clock().now().to_msg()
+        pointStamped.header.stamp = self.goal_t.to_msg()
         pointStamped.header.frame_id = 'odom'
         pointStamped.point.x = self.target_x
         pointStamped.point.y = self.target_y
