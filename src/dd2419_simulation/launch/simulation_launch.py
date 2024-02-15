@@ -27,7 +27,9 @@ def generate_launch_description():
 
     rviz = Node(package='rviz2', executable='rviz2', arguments=['-d', rviz_file])
     
-    ld = LaunchDescription([baselink_2_lidar_tf, start_gazebo_server_cmd, start_gazebo_client_cmd, rviz])
+    sim_node = Node(package='dd2419_simulation', executable='simulation_node')
+    
+    ld = LaunchDescription([baselink_2_lidar_tf, start_gazebo_server_cmd, start_gazebo_client_cmd, rviz, sim_node])
     
     return ld
     

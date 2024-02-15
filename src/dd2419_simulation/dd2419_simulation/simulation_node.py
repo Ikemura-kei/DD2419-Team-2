@@ -18,17 +18,16 @@ class SimulationNode(Node):
     
     def __init__(self):
         super().__init__('simulation_node')
-        
-        self.spawn_entity_client = self.create_client(SpawnEntity, '/spawn_entity')
-        self.generate_objects_and_map()
-        
+    
         self.map_pub = self.create_publisher(OccupancyGrid, self.MAP_TOPIC, 10)
-        
-        self.map_pub_timer = self.create_timer(float(1.0/self.MAP_FREQ), self.publish_map)
-        
+    
+        self.spawn_entity_client = self.create_client(SpawnEntity, '/spawn_entity')
         while not self.spawn_entity_client.wait_for_service(timeout_sec=1.0):
             self.get_logger().info('service not available, waiting again...')
+        self.generate_objects_and_map()
     
+        self.map_pub_timer = self.create_timer(float(1.0/self.MAP_FREQ), self.publish_map)
+        
     def generate_objects_and_map(self):
         
         self.request = SpawnEntity.Request()
