@@ -4,13 +4,13 @@
 
   Try sending commands:
 
-    ros2 topic pub /demo/cmd_vel geometry_msgs/Twist '{linear: {x: 1.0}}' -1
+    ros2 topic pub /simulation/cmd_vel geometry_msgs/Twist '{linear: {x: 1.0}}' -1
 
-    ros2 topic pub /demo/cmd_vel geometry_msgs/Twist '{angular: {z: 0.1}}' -1
+    ros2 topic pub /simulation/cmd_vel geometry_msgs/Twist '{angular: {z: 0.1}}' -1
 
   Try listening to odometry:
 
-    ros2 topic echo /demo/odom
+    ros2 topic echo /simulation/odom
 
   Try listening to TF:
 

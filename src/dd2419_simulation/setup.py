@@ -25,6 +25,7 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
+            'simulation_node = dd2419_simulation.simulation_node:main',
         ],
     },
 )
