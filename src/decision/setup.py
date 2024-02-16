@@ -21,6 +21,7 @@ setup(
     entry_points={
         'console_scripts': [
             'ms1_go_to_obj_node = decision.ms1_go_to_obj_node:main',
+            'ms1_go_to_obj_node_v2 = decision.ms1_go_to_obj_node_v2:main',
             'ms1_pick_and_place_node = decision.ms1_pick_and_place_node:main'
         ],
     },
