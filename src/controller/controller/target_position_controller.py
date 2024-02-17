@@ -3,7 +3,6 @@ import sensor_msgs_py.point_cloud2 as pc2
 from geometry_msgs.msg import Twist
 from sensor_msgs.msg import Joy
 from geometry_msgs.msg import Point, PoseStamped
-from tf2_geometry_msgs.tf2_geometry_msgs import do_transform_pose_stamped
 
 from tf2_ros.buffer import Buffer
 from tf2_ros.transform_listener import TransformListener
@@ -37,36 +36,24 @@ class TargetPositionController(Node):
         self.listener = TransformListener(self.tf2Buffer, self)
 
         self._pub = self.create_publisher(
-            Twist, '/motor_controller/twist', 10)
+            Twist, '/simulation/cmd_vel', 10)
         
         self._pub2 = self.create_publisher(
             PointStamped, '/clicked_point', 10)
         
         self.joy_sub = self.create_subscription(Joy, '/joy', self.joy_command_cb, 10)
         
-        self.goal_sub = self.create_subscription(Point, '/plan_goal', self.goal_cb, 10)
+        self.goal_sub = self.create_subscription(Point, '/target_position', self.target_position_cb, 10)
 
         # Timer to publish commands every 100 milliseconds (10 Hz)
         self.timer = self.create_timer(0.1, self.publish_twist)
         self.timer = self.create_timer(0.1, self.publish_point)
         
-    def goal_cb(self, msg:Point):
+    def target_position_cb(self, msg:Point):
         stamp = rclpy.time.Time()
-        
-        transform_base2odom = self.tf2Buffer.lookup_transform('odom', 'base_link', stamp)
-        target_pose = PoseStamped()
-        target_pose.header.frame_id = 'base_link'
-        target_pose.header.stamp = stamp.to_msg()
-        target_pose.pose.position.x = msg.x
-        target_pose.pose.position.y = msg.y
-        target_pose.pose.orientation.w = 1.0
-        target_pose.pose.orientation.x = target_pose.pose.orientation.y = target_pose.pose.orientation.z = 0.0
-        target_pose = do_transform_pose_stamped(target_pose, transform_base2odom)
+
         self.goal_t = stamp
-        self.target_x = target_pose.pose.position.x
-        self.target_y = target_pose.pose.position.y
-        print("orig x: {}, orig y: {}".format(msg.x, msg.y))
-        print("x: {}, y: {}".format(self.target_x, self.target_y))
+        self.target_x, self.target_y = msg.x, msg.y
     
     def publish_point(self):
         if self.target_x is None or self.target_y is None:
