@@ -134,6 +134,7 @@ class PathPlanner(Node):
         target_point = Point()
         target_point.x, target_point.y = self.target_x, self.target_y
         self._target_pub.publish(target_point)
+
     def publish_path(self, stamp, x, y, yaw):
         """Takes a 2D pose appends it to the path and publishes the whole path.
 

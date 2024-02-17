@@ -19,7 +19,7 @@ class TargetPositionController(Node):
     target_x = None
     target_y = None
     
-    linear_vel = 1.05
+    linear_vel = 0.2
     alpha = 3.25
     # Define a threshold for stopping distance
     stopping_distance_threshold = 0.125
@@ -105,7 +105,7 @@ class TargetPositionController(Node):
         distance_x = self.target_x-robot_x
         distance_y = self.target_y-robot_y
         
-        target_orientation = robot_orientation-math.atan2(distance_y, distance_x)
+        target_orientation = math.atan2(distance_y, distance_x)-robot_orientation
         
         distance_to_target = math.sqrt(distance_x**2 + distance_y**2)
         
@@ -122,6 +122,7 @@ class TargetPositionController(Node):
         if distance_to_target <= self.stopping_distance_threshold:
             # Set linear velocity to zero to stop the robot
             twist_msg.linear.x = 0.0
+            twist_msg.angular.z = 0.0
             self.target_x = self.target_y = None
         else:
             twist_msg.linear.x = self.linear_vel
