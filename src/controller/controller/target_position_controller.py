@@ -96,7 +96,7 @@ class TargetPositionController(Node):
         distance_x = self.target_x-robot_x
         distance_y = self.target_y-robot_y
         
-        target_orientation = robot_orientation-math.atan2(distance_y, distance_x)
+        target_orientation = math.atan2(distance_y, distance_x)-robot_orientation
         
         distance_to_target = math.sqrt(distance_x**2 + distance_y**2)
         
