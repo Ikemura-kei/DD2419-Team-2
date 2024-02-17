@@ -12,6 +12,8 @@ from geometry_msgs.msg import PointStamped
 import rclpy
 from rclpy.node import Node
 
+from std_msgs.msg import String
+
 import math
 
 class TargetPositionController(Node):
@@ -41,6 +43,8 @@ class TargetPositionController(Node):
         self._pub2 = self.create_publisher(
             PointStamped, '/clicked_point', 10)
         
+        self.publisher_ = self.create_publisher(String, 'task_completion', 10)
+        
         self.joy_sub = self.create_subscription(Joy, '/joy', self.joy_command_cb, 10)
         
         self.goal_sub = self.create_subscription(Point, '/target_position', self.target_position_cb, 10)
@@ -48,8 +52,15 @@ class TargetPositionController(Node):
         # Timer to publish commands every 100 milliseconds (10 Hz)
         self.timer = self.create_timer(0.1, self.publish_twist)
         self.timer = self.create_timer(0.1, self.publish_point)
+
+    def publish_completion(self):
+        msg = String()
+        msg.data = 'Task completed'
+        self.publisher_.publish(msg)
+        self.get_logger().info('Published task completion')
         
     def target_position_cb(self, msg:Point):
+        self.get_logger().info('Received target position: %f, %f' % (msg.x, msg.y))
         stamp = rclpy.time.Time()
 
         self.goal_t = stamp
@@ -124,6 +135,7 @@ class TargetPositionController(Node):
             twist_msg.linear.x = 0.0
             twist_msg.angular.z = 0.0
             self.target_x = self.target_y = None
+            self.publish_completion()
         else:
             twist_msg.linear.x = self.linear_vel
             

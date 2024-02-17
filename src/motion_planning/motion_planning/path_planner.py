@@ -1,7 +1,10 @@
-from geometry_msgs.msg import PoseStamped, PointStamped, Point
+from geometry_msgs.msg import PoseArray, PointStamped, Point, PoseStamped
 
 
 from nav_msgs.msg import OccupancyGrid, Path
+
+from tf2_ros.buffer import Buffer
+from tf2_ros.transform_listener import TransformListener
 
 from tf_transformations import quaternion_from_euler
 from tf2_geometry_msgs.tf2_geometry_msgs import do_transform_pose_stamped
@@ -13,8 +16,8 @@ import math
 import numpy as np
 
 class PathPlanner(Node):
-    target_x = 4.3
-    target_y = 1.5
+    target_x = None
+    target_y = None
     origin_x = 0.0
     origin_y = 0.0
     map = None
@@ -22,6 +25,12 @@ class PathPlanner(Node):
     def __init__(self):
         super().__init__('target_position_controller')
         self.get_logger().info('Welcome to path planner')
+
+        # Initialize the transform listener and assign it a buffer
+        self.tf2Buffer = Buffer(cache_time=None)
+
+        #transform listener fills the buffer
+        self.listener = TransformListener(self.tf2Buffer, self)
 
         self.map_sub = self.create_subscription(OccupancyGrid, '/map', self.map_cb, 10)
 
@@ -31,13 +40,15 @@ class PathPlanner(Node):
             PointStamped, '/clicked_point', 10)
         self.publish_point()
 
-        self._target_pub = self.create_publisher(
-            Point, '/target_position', 10)
+        self._poses_pub = self.create_publisher(
+            PoseArray, '/planned_poses', 10)
 
         # Initialize the path publisher
         self._path_pub = self.create_publisher(Path, 'path', 10)
         # Store the path here
         self._path = Path() 
+
+        self.timer = self.create_timer(0.1, self.dijkstra)
 
     def publish_point(self):
         if self.target_x is None or self.target_y is None:
@@ -53,8 +64,6 @@ class PathPlanner(Node):
     def goal_cb(self, msg:Point):
         stamp = rclpy.time.Time()
 
-        self.get_logger().info('Received goal: x=%f, y=%f' % (msg.x, msg.y))
-        
         transform_base2odom = self.tf2Buffer.lookup_transform('odom', 'base_link', stamp)
         target_pose = PoseStamped()
         target_pose.header.frame_id = 'base_link'
@@ -66,7 +75,8 @@ class PathPlanner(Node):
         target_pose = do_transform_pose_stamped(target_pose, transform_base2odom)
         self.goal_t = stamp
         self.target_x = target_pose.pose.position.x
-        self.target_y = target_pose.pose.position.y     
+        self.target_y = target_pose.pose.position.y  
+        self.get_logger().info('Received goal: x: %f, y: %f' % (self.target_x, self.target_y))
         
     def map_cb(self, msg):
         if self.map is not None:
@@ -80,8 +90,6 @@ class PathPlanner(Node):
                 map[i][j] = msg.data[i * size + j]
         self.map = map
 
-        self.dijkstra()
-
     def dijkstra(self):
         if self.map is None or self.target_x is None or self.target_y is None or self.origin_x is None or self.origin_y is None:
             return None
@@ -89,9 +97,7 @@ class PathPlanner(Node):
         self.get_logger().info("Dijkstra")
 
         map_origin_x, map_origin_y = self.from_world_to_map(self.origin_x, self.origin_y)
-        self.get_logger().info("map_origin_x: %d, map_origin_y: %d" % (map_origin_x, map_origin_y))
         map_target_x, map_target_y = self.from_world_to_map(self.target_x, self.target_y)
-        self.get_logger().info("map_target_x: %d, map_target_y: %d" % (map_target_x, map_target_y))
 
         queue = []
         visited = []
@@ -127,13 +133,26 @@ class PathPlanner(Node):
                         links[x + i][y + j] = [x, y]
                         queue.append([x + i, y + j])
         x, y = map_target_x, map_target_y
+        current_direction = [0, 0]
         while links[x][y] is not None:
+            if current_direction == [x-links[x][y][0], y-links[x][y][1]]:
+                x, y = links[x][y]
+                continue
+            current_direction = [x-links[x][y][0], y-links[x][y][1]]
             self.publish_path(self.get_clock().now().to_msg(), x, y, 0.0)
             x, y = links[x][y]
 
-        target_point = Point()
-        target_point.x, target_point.y = self.target_x, self.target_y
-        self._target_pub.publish(target_point)
+        self.publish_path(self.get_clock().now().to_msg(), map_origin_x, map_origin_y, 0.0)
+
+        pose_array = PoseArray()
+        for pose_stamped in self._path.poses:
+            # Access attribute of each pose object
+            pose_array.poses.append(pose_stamped.pose)
+            # Do something with attribute_value
+        self.get_logger().info("Publishing poses")
+        self._poses_pub.publish(pose_array)
+        self.target_x = self.target_y = None
+        self._path = Path()
 
     def publish_path(self, stamp, x, y, yaw):
         """Takes a 2D pose appends it to the path and publishes the whole path.
@@ -200,8 +219,6 @@ class PathPlanner(Node):
 
         y = int((world_x / self.resolution) + len(self.map[0])/2)
         x = int((world_y / self.resolution) + len(self.map)/2)
-
-        self.get_logger().info("x: %d, y: %d" % (x, y))
 
         return x, y  
 
