@@ -6,7 +6,7 @@ import numpy as np
 from gazebo_msgs.srv import SpawnEntity
 
 HEIGHT = 2
-MODEL = "<?xml version=\"1.0\" ?><sdf version=\"1.5\"><model name=\"will_be_ignored\"><static>true</static><link name=\"link\"><visual name=\"visual\"><geometry><cylinder><radius>RRRRR</radius><length>{}</length></cylinder></geometry></visual></link></model></sdf>".format(HEIGHT)
+MODEL = "<?xml version=\"1.0\" ?><sdf version=\"1.5\"><model name=\"will_be_ignored\"><static>true</static><link name=\"link\"><collision name=\"collision\"><geometry><cylinder><radius>RRRRR</radius><length>{}</length></cylinder></geometry></collision><visual name=\"visual\"><geometry><cylinder><radius>RRRRR</radius><length>{}</length></cylinder></geometry></visual></link></model></sdf>".format(HEIGHT, HEIGHT)
 
 class SimulationNode(Node):
     # -- user defined parameters --
