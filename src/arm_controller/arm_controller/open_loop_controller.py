@@ -18,7 +18,7 @@ ANGLE_OPEN_GRIPPER = [4200, 12000, 12000, 17000, 10000, 12000]
 
 PERIOD = 0.1
 
-DELAY = 6000 #ms
+DELAY = 5000 #ms
 
 class OpenLoopController(Node):
     def __init__(self):
@@ -27,6 +27,11 @@ class OpenLoopController(Node):
         self.joint_pos_sub = self.create_subscription(JointState, topic='/servo_pos_publisher', callback=self.joint_pos_cb, qos_profile=10)
         self.joycon_sub = self.create_subscription(Joy, topic='/joy', callback=self.joy_cb, qos_profile=10)
         self.joint_cmd_pub = self.create_publisher(Int16MultiArray, '/multi_servo_cmd_sub', 10)
+        
+        #ADDING FROM KINEMATICS STUFF. MAY DELETE LATER
+        
+        self.kinematics_sub = self.create_subscription(Int16MultiArray, topic='/kinematic_control', callback=self.kinematic_go_cb, qos_profile=10)
+        
         
         self.last_joint_cmd_pub_time = self.get_clock().now()
         
@@ -150,7 +155,23 @@ class OpenLoopController(Node):
             self.publish_joint_cmd(self.joint_angles, self.joint_times)
             print("Moving arm down to place")
             return
+    
+    
+    
+    
+    #ADDING FROM KINEMATICS STUFF. MAY DELETE LATER
+    
+    def kinematic_go_cb(self, msg:Int16MultiArray):
         
+        self.joint_angles = [4200, msg.data[4], msg.data[3], msg.data[2], msg.data[1], msg.data[0]]
+        self.joint_times = [DELAY] * 6
+        print("Moving arm to {}".format(self.joint_angles))
+        
+        
+        # return
+        self.publish_joint_cmd(self.joint_angles, self.joint_times)
+        return
+    
         
     def joint_pos_cb(self, msg:JointState):
         assert len(msg.name) == 6

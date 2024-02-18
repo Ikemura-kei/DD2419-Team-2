@@ -5,7 +5,7 @@ from std_msgs.msg import Int16MultiArray, MultiArrayDimension
 
 # "{layout: {dim: [{label: '', size: 0, stride: 0}], data_offset: 0}, data: [12000,12000,12000,12000,12000,12000,500,500,500,500,500,500]}"
 
-ANGLE_LIMITS_LOW = [4200, 3100, 3200, 3000, 3750, 1000]
+ANGLE_LIMITS_LOW = [4200, 3100, 3200, 3000, 750, 1000]
 ANGLE_LIMITS_HIGH = [12050, 21500, 20500, 23000, 17050, 22000]
 ANGLE_HOMES = [4200, 12000, 12000, 12000, 12000, 12000]
 PERIOD = 0.1
@@ -65,7 +65,7 @@ class JoyStickController(Node):
         
         self.joint_angles[5] += int(self.joy_cmd.axes[3] * 250) # right-stick horizontal
         self.joint_angles[3] += int(self.joy_cmd.axes[4] * 70) # right-stick verticle
-        self.joint_angles[0] += int(self.joy_cmd.axes[1] * 300) # left-stick verticle
+        self.joint_angles[1] += int(self.joy_cmd.axes[1] * 300) # left-stick verticle
         self.joint_angles[4] += int(self.joy_cmd.axes[2] * 35) - int(self.joy_cmd.axes[5] * 35) # LT & RT
         self.joint_times = [90] * 6
             

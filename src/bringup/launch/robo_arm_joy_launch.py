@@ -12,6 +12,9 @@ def generate_launch_description():
     
     joystick_ctrl_node = Node(executable='joystick_controller', package='arm_controller')
     
+    # fk_node = Node(executable='forward_kinematics', package='arm_controller', output='screen')
+    
     joystick_launch = IncludeLaunchDescription(PythonLaunchDescriptionSource(os.path.join(teleop_twist_joy_dir, 'launch/teleop-launch.py')), launch_arguments={'joy_config': 'xbox'}.items())
     
-    return LaunchDescription([joystick_launch, micro_ros_agent_node, joystick_ctrl_node])
+    # return LaunchDescription([joystick_launch, micro_ros_agent_node, joystick_ctrl_node, fk_node])
+    return LaunchDescription([joystick_launch, micro_ros_agent_node, joystick_ctrl_node])  
