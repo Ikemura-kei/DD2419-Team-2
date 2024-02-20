@@ -19,6 +19,8 @@ ANGLE_LIMITS_HIGH = [12050, 21500, 20500, 23000, 17050, 22000]
 ANGLE_HOMES = [12000, 12000, 12000, 12000, 12000] #keeping all but the ee
 PERIOD = 0.1
 
+DELAY = 5000 #ms
+
 ENCODER_2_DEG = 0.01 * (np.pi/180)
 DEG_2_ENCODER = 100 * (180/np.pi)
 D1 = 0.065
@@ -47,6 +49,7 @@ class ForwardKinematics(Node):
         self.kinematics_pub = self.create_publisher(Int16MultiArray, '/kinematic_control', 10)
         
         self.joycon_sub = self.create_subscription(Joy, topic='/joy', callback=self.joy_cb, qos_profile=10)
+        self.joint_cmd_pub = self.create_publisher(Int16MultiArray, '/multi_servo_cmd_sub', 10)
         
         
         # Initialize the transform broadcaster
@@ -82,7 +85,9 @@ class ForwardKinematics(Node):
         self.zero_3 = ANGLE_HOMES[3]
         self.zero_4 = ANGLE_HOMES[4] # top joint before end effector
         
-        self.current_qs = [0, (np.pi/2), 0, (np.pi/2), 0] #this is our home for angles. thi smay need to change!!!!!!!!!!!!!!!!
+        self.current_qs = [0, (np.pi/2), 0, (np.pi/2), 0] #this is our home for angles. this may need to change!!!!!!!!!!!!!!!!
+        
+        self.desired_encoder_vals = [12000, 12000, 12000, 12000, 12000]
 
     
     
@@ -90,30 +95,73 @@ class ForwardKinematics(Node):
         # axes: left-stick horizontal, left-stick verticle, LT, right-stick horizontal, right-stick verticle, RT, left-cross horizontal, left-cross verticle
         # buttons: A, B, X, Y, LB, RB, SACK, START
         self.joy_cmd = msg
+        
+        if self.joy_cmd.buttons[1]: # red button is pressed.. RESET!!!!!!!!
+        
+            self.joint_angles = [4200, 12000, 12000, 12000, 12000, 12000]
+            self.joint_times = [DELAY] * 6
+            self.publish_joint_cmd(self.joint_angles, self.joint_times)
+            print("Resetting home")
+            
+        
+        if self.joy_cmd.buttons[2]: # blue button is pressed.. PICKUP CONFIG
+        
+            self.joint_angles = [4200, 12000, 5000, 19000, 10000, 12000] #[4200, 12000, 4800, 18574, 11151, 12000]
+            self.joint_times = [DELAY] * 6
+            self.publish_joint_cmd(self.joint_angles, self.joint_times)
+            print("Init pickup")
+        
         if self.joy_cmd.buttons[3]: # if Y is pressed. Start IK
             
-            desired_pose = np.array([[-0.75475116, -0.45769641,  0.46996242,  0.13886234], #out to the left (when looking at robot)
-                                     [0.40937023, -0.88839653, -0.20776821, -0.0613904],
-                                     [0.51260775,  0.03557532,  0.85788559,  0.39023585],
-                                     [0,          0,          0,          1 ]]).reshape((4,4))
+
             
-            desired_pose = np.array([[-2.36612254e-01,  5.16289776e-03,  9.71590441e-01,  3.17013190e-01], #straight out
-                                     [-2.18148850e-02, -9.99762027e-01, -1.23494061e-16, -2.18166311e-17],
-                                     [9.71359229e-01, -2.11951338e-02,  2.36668575e-01,  2.07372523e-01],
-                                     [0,          0,          0,          1 ]]).reshape((4,4))
-            
-            # desired_pose = np.array([[5.11022852e-01,  2.71393271e-02,  8.59138581e-01,  3.03887530e-01], #straight out, but down a lot. DOES NOT WORK!!!
+            # desired_pose = np.array([[5.11022852e-01,  2.71393271e-02,  8.59138581e-01,  3.03887530e-01], #straight out, but down a lot.
             #                          [ 5.30331184e-02, -9.98592754e-01, -2.07850033e-16, -4.49749144e-17],
             #                          [8.57929562e-01,  4.55627981e-02, -5.11743000e-01, -5.34450878e-03],
             #                          [0,          0,          0,          1 ]]).reshape((4,4))
             
             
-            # desired_pose = np.array([[0.25822102,  0.22619024,  0.93923366,  0.3046841], #down a lot, and to the right. DOES NOT WORK!!!
-            #                          [ 0.11033404, -0.97274864,  0.20392762,  0.0661534],
-            #                          [0.95976471,  0.05097104, -0.27614063,  0.07434399],
-            #                          [0,          0,          0,          1 ]]).reshape((4,4))
+            desired_pose = np.array([[0.25822102,  0.22619024,  0.93923366,  0.3046841], #down a lot, and to the right.
+                                     [ 0.11033404, -0.97274864,  0.20392762,  0.0661534],
+                                     [0.95976471,  0.05097104, -0.27614063,  0.07434399],
+                                     [0,          0,          0,          1 ]]).reshape((4,4))
             
-        
+            
+            
+            desired_pose = np.array([[9.45630384e-01,  3.04698070e-01,  1.13764065e-01,  1.97579641e-01], #down to pickup an object
+                                    [ 3.02516728e-01, -9.52448994e-01,  3.63942753e-02,  6.32077263e-02],
+                                    [1.19443734e-01,  3.57408181e-16, -9.92840971e-01, -8.67390514e-02],
+                                    [0,          0,          0,          1 ]]).reshape((4,4))
+            
+            
+            
+            desired_pose = np.array([[0.90094339,  0.27990731,  0.33159146,  0.20733415], #down to pickup an object to the left
+                                    [ 0.3201068,  -0.94461409, -0.07235926, -0.04524406],
+                                    [0.29297208,  0.17133628, -0.94064406, -0.07432066],
+                                    [0,          0,          0,          1 ]]).reshape((4,4))
+            
+            
+            
+            # desired_pose = np.array([[8.37858517e-01, -4.03545296e-01,  3.67619776e-01,  2.31521143e-01], #down and far left (when looking at robot) on one side to pick object
+            #                         [ -3.69539637e-01, -9.14959668e-01, -1.62139640e-01, -1.02112991e-01],
+            #                         [4.01787957e-01,  3.49760316e-16, -9.15732733e-01, -9.33479706e-02],
+            #                         [0,          0,          0,          1 ]]).reshape((4,4))
+            
+            
+            # desired_pose = np.array([[0.83803405,  0.49903877,  0.22058841,  0.17665445], #far on the right (when looking at robot) and close to body
+            #                         [ 0.47165006, -0.86583697,  0.16695078,  0.13369967],
+            #                         [0.27430852, -0.0358699,  -0.96097252, -0.09478877],
+            #                         [0,          0,          0,          1 ]]).reshape((4,4))
+            
+            
+            desired_pose = np.array([[0.59396024,  0.78574234,  0.17268526,  0.18163524], #down to pickup an object to the left (looking at robot) with last joint turned a lot
+                                    [ 0.80106248, -0.59744652, -0.03683141, -0.03874032],
+                                    [0.07423021,  0.16020807, -0.98428819, -0.10220992],
+                                    [0,          0,          0,          1 ]]).reshape((4,4))
+            
+            
+            
+            
             r_des = desired_pose[0:3, 0:3]
             position_des = [desired_pose[0,3],desired_pose[1,3], desired_pose[2,3]]
             
@@ -126,19 +174,21 @@ class ForwardKinematics(Node):
             
             des_qs = [round(elem,2) for elem in des_qs]
             
-            print(des_qs)
+            print([elem* (180/np.pi) for elem in des_qs])
             
-            encoder_vals = self.angle_to_encoder(des_qs)
+            self.desired_encoder_vals = self.angle_to_encoder(des_qs)
             
-            print(encoder_vals)
+            print(self.desired_encoder_vals)
             
-            vals = Int16MultiArray()
-            vals.data = encoder_vals
+            print("Feasible: {}".format(self.sol_feasbile()))
             
-            print(encoder_vals)
+        
+        if self.joy_cmd.buttons[0]: # if A is pressed. Move arm to position!
             
-            self.kinematics_pub.publish(vals)
-            
+            if self.sol_feasbile():
+                self.kinematic_go()
+            else:
+                print("It ain't feasible so I ain't goin!")
     
     def joint_cmd_cb(self, msg:Int16MultiArray):
         assert len(msg.data) == 12
@@ -194,6 +244,15 @@ class ForwardKinematics(Node):
         t.transform.rotation.y = q[1]
         t.transform.rotation.z = q[2]
         t.transform.rotation.w = q[3]
+        
+        # print("ROTATION:")
+        # print(t.transform.rotation)
+        # print()
+        
+        # print(quaternion_matrix([t.transform.rotation.x, t.transform.rotation.y, t.transform.rotation.z, t.transform.rotation.w]))
+        
+        # print("ROTATION MATRIX:")
+        # print(trans)
 
         # Send the transformation
         self.tf_broadcaster.sendTransform(t)
@@ -414,11 +473,26 @@ class ForwardKinematics(Node):
 
 
 
+    def sol_feasbile(self):
+        
+        # CURRENTLY I DID NOT ADD THE GRIPPER SO I PASS TO THE NEXT VALUE! MAY WANT TO CHANGE
+        encoder_vals = self.desired_encoder_vals[::-1]
+        for i in range(5):
+            if (encoder_vals[i] < ANGLE_LIMITS_LOW[i + 1]) or (encoder_vals[i] > ANGLE_LIMITS_HIGH[i + 1]):
+                return False
+        return True
 
 
 
-
-
+    def kinematic_go(self):
+        
+        self.joint_angles = [4200, self.desired_encoder_vals[4], self.desired_encoder_vals[3], self.desired_encoder_vals[2], self.desired_encoder_vals[1], self.desired_encoder_vals[0]]
+        self.joint_times = [DELAY] * 6
+        print("Moving arm to {}".format(self.joint_angles))
+        
+        # return
+        self.publish_joint_cmd(self.joint_angles, self.joint_times)
+        return
         
         
     def joint_pos_cb(self, msg:JointState):
@@ -448,8 +522,8 @@ class ForwardKinematics(Node):
             self.joint_cmd.data.append(joint_angles[i])
             
         for i in range(6):
-            if joint_times[i] < 50:
-                joint_times[i] = 50
+            if joint_times[i] < 1000:
+                joint_times[i] = 1000
             self.joint_cmd.data.append(joint_times[i])
                 
         print(self.joint_cmd)

@@ -91,7 +91,7 @@ class OpenLoopController(Node):
         
         
         #####################################################################################
-        # RED BUTTON -- Pick
+        # Pick
         #####################################################################################
             
         if self.gripper_closed and ((self.get_clock().now() - self.delay_time).nanoseconds / 1e6 >= DELAY):
@@ -200,8 +200,8 @@ class OpenLoopController(Node):
             self.joint_cmd.data.append(joint_angles[i])
             
         for i in range(6):
-            if joint_times[i] < 50:
-                joint_times[i] = 50
+            if joint_times[i] < 1000:
+                joint_times[i] = 1000
             self.joint_cmd.data.append(joint_times[i])
                 
         print(self.joint_cmd)
