@@ -11,8 +11,8 @@ from geometry_msgs.msg import TransformStamped
 
 # "{layout: {dim: [{label: '', size: 0, stride: 0}], data_offset: 0}, data: [12000,12000,12000,12000,12000,12000,500,500,500,500,500,500]}"
 
-ANGLE_LIMITS_LOW = [4200, 3100, 3200, 3000, 750, 1000]
-ANGLE_LIMITS_HIGH = [12050, 21500, 20500, 23000, 17050, 22000]
+ANGLE_LIMITS_LOW = [1000, 3100, 2000, 7000, 3500, 8200]
+ANGLE_LIMITS_HIGH = [12050, 21500, 20500, 23000, 16000, 16500]
 
 
 
@@ -26,7 +26,7 @@ DEG_2_ENCODER = 100 * (180/np.pi)
 D1 = 0.065
 A2 = 0.101
 A3 = 0.094
-D5 = 0.169 # need to change this one as ee moves
+D5 = 0.137 # this is tip of ee when it is at encoder value of 1000
 
 '''
 LX16AServo servo1(&servoBus, 1); // 0-16800 (0-168 degrees)
@@ -98,7 +98,7 @@ class ForwardKinematics(Node):
         
         if self.joy_cmd.buttons[1]: # red button is pressed.. RESET!!!!!!!!
         
-            self.joint_angles = [4200, 12000, 12000, 12000, 12000, 12000]
+            self.joint_angles = [1000, 12000, 12000, 12000, 12000, 12000]
             self.joint_times = [DELAY] * 6
             self.publish_joint_cmd(self.joint_angles, self.joint_times)
             print("Resetting home")
@@ -106,7 +106,7 @@ class ForwardKinematics(Node):
         
         if self.joy_cmd.buttons[2]: # blue button is pressed.. PICKUP CONFIG
         
-            self.joint_angles = [4200, 12000, 5000, 19000, 10000, 12000] #[4200, 12000, 4800, 18574, 11151, 12000]
+            self.joint_angles = [1000, 12000, 5000, 19000, 10000, 12000] #[4200, 12000, 4800, 18574, 11151, 12000]
             self.joint_times = [DELAY] * 6
             self.publish_joint_cmd(self.joint_angles, self.joint_times)
             print("Init pickup")
@@ -148,17 +148,10 @@ class ForwardKinematics(Node):
             #                         [0,          0,          0,          1 ]]).reshape((4,4))
             
             
-            # desired_pose = np.array([[0.83803405,  0.49903877,  0.22058841,  0.17665445], #far on the right (when looking at robot) and close to body
-            #                         [ 0.47165006, -0.86583697,  0.16695078,  0.13369967],
-            #                         [0.27430852, -0.0358699,  -0.96097252, -0.09478877],
-            #                         [0,          0,          0,          1 ]]).reshape((4,4))
-            
-            
-            desired_pose = np.array([[0.59396024,  0.78574234,  0.17268526,  0.18163524], #down to pickup an object to the left (looking at robot) with last joint turned a lot
-                                    [ 0.80106248, -0.59744652, -0.03683141, -0.03874032],
-                                    [0.07423021,  0.16020807, -0.98428819, -0.10220992],
+            desired_pose = np.array([[0.83803405,  0.49903877,  0.22058841,  0.17665445], #far on the right (when looking at robot) and close to body
+                                    [ 0.47165006, -0.86583697,  0.16695078,  0.13369967],
+                                    [0.27430852, -0.0358699,  -0.96097252, -0.09478877],
                                     [0,          0,          0,          1 ]]).reshape((4,4))
-            
             
             
             
@@ -170,7 +163,11 @@ class ForwardKinematics(Node):
             
             print("Solving now...")
             
-            des_qs = self.solve_ik(position_des, r_des, self.current_qs)
+            res , des_qs = self.solve_ik(position_des, r_des, self.current_qs)
+        
+            if not res:
+                print("IK did not converge in time!")
+                return
             
             des_qs = [round(elem,2) for elem in des_qs]
             
@@ -232,7 +229,7 @@ class ForwardKinematics(Node):
 
         t = TransformStamped()
         t.header.stamp = self.get_clock().now().to_msg()
-        t.header.frame_id = 'base_link' # will need to change this to arm_base
+        t.header.frame_id = 'arm_base'
         t.child_frame_id = 'joint_' + str(joint_num)
 
         t.transform.translation.x = trans[0,3]   
@@ -279,7 +276,11 @@ class ForwardKinematics(Node):
         
         print("Solving now...")
         
-        des_qs = self.solve_ik(position_des, r_des, self.current_qs)
+        res , des_qs = self.solve_ik(position_des, r_des, self.current_qs)
+        
+        if not res:
+            print("IK did not converge in time!")
+            return
         
         des_qs = [round(elem,2) for elem in des_qs]
         
@@ -380,7 +381,7 @@ class ForwardKinematics(Node):
         return np.reshape(error, (3,1))
 
 
-    def solve_ik(self, point, R, joint_positions):
+    def solve_ik(self, point, R, joint_positions, timeout=10000):
         
         '''
         This takes x,y,z point, rotation matrix R, and the current joint_positions
@@ -406,11 +407,14 @@ class ForwardKinematics(Node):
 
 
         max_error = 1
-        tolerance = 0.0005      
+        tolerance = 0.0005
         
-        while(max_error >= tolerance):
+        delay_time = self.get_clock().now()
+        
+    
+        # while loop breaks when error below tolerance or timeout occurs. Default 10 seconds
+        while(max_error >= tolerance) and ((self.get_clock().now() - delay_time).nanoseconds / 1e6 <= timeout):
             
-
             q1 = q[0,0]
             q2 = q[1,0]
             q3 = q[2,0]
@@ -461,12 +465,15 @@ class ForwardKinematics(Node):
 
             print(max_error)
             
-            
+             
         q = np.reshape(q,(5,))
         q = q.tolist()
+        
+        if ((self.get_clock().now() - delay_time).nanoseconds / 1e6 > timeout):
+            return False , q
 
         #return the desired joint params
-        return q
+        return True , q
 
 
 
@@ -486,7 +493,7 @@ class ForwardKinematics(Node):
 
     def kinematic_go(self):
         
-        self.joint_angles = [4200, self.desired_encoder_vals[4], self.desired_encoder_vals[3], self.desired_encoder_vals[2], self.desired_encoder_vals[1], self.desired_encoder_vals[0]]
+        self.joint_angles = [1000, self.desired_encoder_vals[4], self.desired_encoder_vals[3], self.desired_encoder_vals[2], self.desired_encoder_vals[1], self.desired_encoder_vals[0]]
         self.joint_times = [DELAY] * 6
         print("Moving arm to {}".format(self.joint_angles))
         
