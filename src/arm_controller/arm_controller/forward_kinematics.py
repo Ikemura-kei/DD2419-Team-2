@@ -5,9 +5,12 @@ from std_msgs.msg import Int16MultiArray, MultiArrayDimension, Float32MultiArray
 
 import numpy as np
 
+from tf2_ros.buffer import Buffer
+from tf2_ros.transform_listener import TransformListener
 from tf2_ros import TransformBroadcaster
 from tf_transformations import quaternion_from_matrix, quaternion_matrix
-from geometry_msgs.msg import TransformStamped
+from geometry_msgs.msg import TransformStamped, PoseStamped
+import tf2_geometry_msgs
 
 # "{layout: {dim: [{label: '', size: 0, stride: 0}], data_offset: 0}, data: [12000,12000,12000,12000,12000,12000,500,500,500,500,500,500]}"
 
@@ -44,13 +47,19 @@ class ForwardKinematics(Node):
         self.joint_pos_sub = self.create_subscription(JointState, topic='/servo_pos_publisher', callback=self.joint_pos_cb, qos_profile=10)
         self.joint_cmd_sub = self.create_subscription(Int16MultiArray, '/multi_servo_cmd_sub', callback=self.joint_cmd_cb, qos_profile=10)
         
-        self.ik_sub = self.create_subscription(Float32MultiArray, '/ik_publisher', callback=self.ik_cb, qos_profile=10)
+        self.ik_sub = self.create_subscription(PoseStamped, '/ik_publisher', callback=self.ik_cb, qos_profile=10)
         
         self.kinematics_pub = self.create_publisher(Int16MultiArray, '/kinematic_control', 10)
         
         self.joycon_sub = self.create_subscription(Joy, topic='/joy', callback=self.joy_cb, qos_profile=10)
         self.joint_cmd_pub = self.create_publisher(Int16MultiArray, '/multi_servo_cmd_sub', 10)
         
+        
+        # Initialize the transform listener and assign it a buffer
+        self.tf2Buffer = Buffer(cache_time=None)
+
+        #transform listener fills the buffer
+        self.listener = TransformListener(self.tf2Buffer, self)
         
         # Initialize the transform broadcaster
         self.tf_broadcaster = TransformBroadcaster(self)
@@ -88,8 +97,8 @@ class ForwardKinematics(Node):
         self.current_qs = [0, (np.pi/2), 0, (np.pi/2), 0] #this is our home for angles. this may need to change!!!!!!!!!!!!!!!!
         
         self.desired_encoder_vals = [12000, 12000, 12000, 12000, 12000]
-
-    
+        
+        
     
     def joy_cb(self, msg:Joy):
         # axes: left-stick horizontal, left-stick verticle, LT, right-stick horizontal, right-stick verticle, RT, left-cross horizontal, left-cross verticle
@@ -111,73 +120,73 @@ class ForwardKinematics(Node):
             self.publish_joint_cmd(self.joint_angles, self.joint_times)
             print("Init pickup")
         
-        if self.joy_cmd.buttons[3]: # if Y is pressed. Start IK
+        # if self.joy_cmd.buttons[3]: # if Y is pressed. Start IK
             
 
             
-            # desired_pose = np.array([[5.11022852e-01,  2.71393271e-02,  8.59138581e-01,  3.03887530e-01], #straight out, but down a lot.
-            #                          [ 5.30331184e-02, -9.98592754e-01, -2.07850033e-16, -4.49749144e-17],
-            #                          [8.57929562e-01,  4.55627981e-02, -5.11743000e-01, -5.34450878e-03],
-            #                          [0,          0,          0,          1 ]]).reshape((4,4))
+        #     # desired_pose = np.array([[5.11022852e-01,  2.71393271e-02,  8.59138581e-01,  3.03887530e-01], #straight out, but down a lot.
+        #     #                          [ 5.30331184e-02, -9.98592754e-01, -2.07850033e-16, -4.49749144e-17],
+        #     #                          [8.57929562e-01,  4.55627981e-02, -5.11743000e-01, -5.34450878e-03],
+        #     #                          [0,          0,          0,          1 ]]).reshape((4,4))
             
             
-            desired_pose = np.array([[0.25822102,  0.22619024,  0.93923366,  0.3046841], #down a lot, and to the right.
-                                     [ 0.11033404, -0.97274864,  0.20392762,  0.0661534],
-                                     [0.95976471,  0.05097104, -0.27614063,  0.07434399],
-                                     [0,          0,          0,          1 ]]).reshape((4,4))
-            
-            
-            
-            desired_pose = np.array([[9.45630384e-01,  3.04698070e-01,  1.13764065e-01,  1.97579641e-01], #down to pickup an object
-                                    [ 3.02516728e-01, -9.52448994e-01,  3.63942753e-02,  6.32077263e-02],
-                                    [1.19443734e-01,  3.57408181e-16, -9.92840971e-01, -8.67390514e-02],
-                                    [0,          0,          0,          1 ]]).reshape((4,4))
+        #     desired_pose = np.array([[0.25822102,  0.22619024,  0.93923366,  0.3046841], #down a lot, and to the right.
+        #                              [ 0.11033404, -0.97274864,  0.20392762,  0.0661534],
+        #                              [0.95976471,  0.05097104, -0.27614063,  0.07434399],
+        #                              [0,          0,          0,          1 ]]).reshape((4,4))
             
             
             
-            desired_pose = np.array([[0.90094339,  0.27990731,  0.33159146,  0.20733415], #down to pickup an object to the left
-                                    [ 0.3201068,  -0.94461409, -0.07235926, -0.04524406],
-                                    [0.29297208,  0.17133628, -0.94064406, -0.07432066],
-                                    [0,          0,          0,          1 ]]).reshape((4,4))
+        #     desired_pose = np.array([[9.45630384e-01,  3.04698070e-01,  1.13764065e-01,  1.97579641e-01], #down to pickup an object
+        #                             [ 3.02516728e-01, -9.52448994e-01,  3.63942753e-02,  6.32077263e-02],
+        #                             [1.19443734e-01,  3.57408181e-16, -9.92840971e-01, -8.67390514e-02],
+        #                             [0,          0,          0,          1 ]]).reshape((4,4))
             
             
             
-            # desired_pose = np.array([[8.37858517e-01, -4.03545296e-01,  3.67619776e-01,  2.31521143e-01], #down and far left (when looking at robot) on one side to pick object
-            #                         [ -3.69539637e-01, -9.14959668e-01, -1.62139640e-01, -1.02112991e-01],
-            #                         [4.01787957e-01,  3.49760316e-16, -9.15732733e-01, -9.33479706e-02],
-            #                         [0,          0,          0,          1 ]]).reshape((4,4))
-            
-            
-            desired_pose = np.array([[0.83803405,  0.49903877,  0.22058841,  0.17665445], #far on the right (when looking at robot) and close to body
-                                    [ 0.47165006, -0.86583697,  0.16695078,  0.13369967],
-                                    [0.27430852, -0.0358699,  -0.96097252, -0.09478877],
-                                    [0,          0,          0,          1 ]]).reshape((4,4))
+        #     desired_pose = np.array([[0.90094339,  0.27990731,  0.33159146,  0.20733415], #down to pickup an object to the left
+        #                             [ 0.3201068,  -0.94461409, -0.07235926, -0.04524406],
+        #                             [0.29297208,  0.17133628, -0.94064406, -0.07432066],
+        #                             [0,          0,          0,          1 ]]).reshape((4,4))
             
             
             
-            r_des = desired_pose[0:3, 0:3]
-            position_des = [desired_pose[0,3],desired_pose[1,3], desired_pose[2,3]]
+        #     # desired_pose = np.array([[8.37858517e-01, -4.03545296e-01,  3.67619776e-01,  2.31521143e-01], #down and far left (when looking at robot) on one side to pick object
+        #     #                         [ -3.69539637e-01, -9.14959668e-01, -1.62139640e-01, -1.02112991e-01],
+        #     #                         [4.01787957e-01,  3.49760316e-16, -9.15732733e-01, -9.33479706e-02],
+        #     #                         [0,          0,          0,          1 ]]).reshape((4,4))
             
-            print(r_des)
-            print(position_des)
             
-            print("Solving now...")
+        #     desired_pose = np.array([[0.83803405,  0.49903877,  0.22058841,  0.17665445], #far on the right (when looking at robot) and close to body
+        #                             [ 0.47165006, -0.86583697,  0.16695078,  0.13369967],
+        #                             [0.27430852, -0.0358699,  -0.96097252, -0.09478877],
+        #                             [0,          0,          0,          1 ]]).reshape((4,4))
             
-            res , des_qs = self.solve_ik(position_des, r_des, self.current_qs)
+            
+            
+        #     r_des = desired_pose[0:3, 0:3]
+        #     position_des = [desired_pose[0,3],desired_pose[1,3], desired_pose[2,3]]
+            
+        #     print(r_des)
+        #     print(position_des)
+            
+        #     print("Solving now...")
+            
+        #     res , des_qs = self.solve_ik(position_des, r_des, self.current_qs)
         
-            if not res:
-                print("IK did not converge in time!")
-                return
+        #     if not res:
+        #         print("IK did not converge in time!")
+        #         return
             
-            des_qs = [round(elem,2) for elem in des_qs]
+        #     des_qs = [round(elem,2) for elem in des_qs]
             
-            print([elem* (180/np.pi) for elem in des_qs])
+        #     print([elem* (180/np.pi) for elem in des_qs])
             
-            self.desired_encoder_vals = self.angle_to_encoder(des_qs)
+        #     self.desired_encoder_vals = self.angle_to_encoder(des_qs)
             
-            print(self.desired_encoder_vals)
+        #     print(self.desired_encoder_vals)
             
-            print("Feasible: {}".format(self.sol_feasbile()))
+        #     print("Feasible: {}".format(self.sol_feasbile()))
             
         
         if self.joy_cmd.buttons[0]: # if A is pressed. Move arm to position!
@@ -242,14 +251,12 @@ class ForwardKinematics(Node):
         t.transform.rotation.z = q[2]
         t.transform.rotation.w = q[3]
         
-        # print("ROTATION:")
-        # print(t.transform.rotation)
-        # print()
-        
-        # print(quaternion_matrix([t.transform.rotation.x, t.transform.rotation.y, t.transform.rotation.z, t.transform.rotation.w]))
-        
-        # print("ROTATION MATRIX:")
-        # print(trans)
+        if(joint_num == 5):
+            print("Rotation")
+            print(t.transform.rotation)
+            print()
+            print("Position")
+            print(t.transform.translation)
 
         # Send the transformation
         self.tf_broadcaster.sendTransform(t)
@@ -264,40 +271,91 @@ class ForwardKinematics(Node):
         
         
     
-    def ik_cb(self, msg:Float32MultiArray):
+    def ik_cb(self, msg:PoseStamped):
         
-        desired_pose = np.array(msg.data).reshape((4,4))
+        #BEFORE THIS IS EVEN CALLED, NEED TO INIT THE TRANSFORMS FOR T1, T2, etc...
         
-        r_des = desired_pose[0:3, 0:3]
-        position_des = [desired_pose[0,3],desired_pose[1,3], desired_pose[2,3]]
+        print("Received Message for IK!")
         
-        print(r_des)
-        print(position_des)
+        obj_stamp = msg.header.stamp
+        obj_frame = msg.header.frame_id
         
-        print("Solving now...")
+        if self.tf2Buffer.can_transform('arm_base', obj_frame, obj_stamp):
+            transform = self.tf2Buffer.lookup_transform('arm_base', obj_frame, obj_stamp)
+            
+            trans_obj = tf2_geometry_msgs.do_transform_pose(msg.pose, transform)
+            
+            #at this point should have Pose object
+            
+            if (trans_obj.position.z < -0.114) or (trans_obj.position.x > 0.290) or (trans_obj.position.y > 0.210) or (trans_obj.position.y < -0.214):
+                # if it is below floor, too far ahead, too far left or right
+                print("Outside of reachable workspace!!")
+                return
+            
+            #in bounds so let's process! 
+            
+            trans_obj_r = quaternion_matrix([trans_obj.orientation.x, trans_obj.orientation.y, trans_obj.orientation.z, trans_obj.orientation.w])
+            
+            trans_obj_r[0,3] = trans_obj.position.x
+            trans_obj_r[1,3] = trans_obj.position.y
+            trans_obj_r[2,3] = trans_obj.position.z
+
+            
+            desired_pose = np.array(trans_obj_r).reshape((4,4))
+            
+            r_des = desired_pose[0:3, 0:3]
+            position_des = [desired_pose[0,3],desired_pose[1,3], desired_pose[2,3]]
+            
+            # print(r_des)
+            # print(position_des)
+            
+            
+            print("Object within workspace. Moving arm to init position...")
+            
+            self.joint_angles = [1000, 12000, 5000, 19000, 10000, 12000] #[4200, 12000, 4800, 18574, 11151, 12000]
+            self.joint_times = [DELAY] * 6
+            self.publish_joint_cmd(self.joint_angles, self.joint_times)
+            time_delay = self.get_clock().now()
+            
+            while ((self.get_clock().now() - time_delay).nanoseconds / 1e6 <= DELAY):
+                continue
+            
+            print("Done moving arm, now onto ik!")
+            
+            print("Solving now...")    
+                
+            res , des_qs = self.solve_ik(position_des, r_des, self.current_qs)
+            
+            if not res:
+                print("IK did not converge in time!")
+                return
+            
+            des_qs = [round(elem,2) for elem in des_qs]
+                
+            print([elem* (180/np.pi) for elem in des_qs])
+            
+            self.desired_encoder_vals = self.angle_to_encoder(des_qs)
+            
+            # print(self.desired_encoder_vals)
+            
+            print("Feasible: {}".format(self.sol_feasbile()))
+            
+            if self.sol_feasbile():
+            
+                vals = Int16MultiArray()
+                vals.data = self.desired_encoder_vals
+
+                # ADD THIS WHEN WANT TO MOVE THE ARM
+                # self.kinematics_pub.publish(vals)
+            else:
+                print("Not feasible so exiting!")
+                return
         
-        res , des_qs = self.solve_ik(position_des, r_des, self.current_qs)
-        
-        if not res:
-            print("IK did not converge in time!")
+        else:
+            print("No transform available!")
             return
+  
         
-        des_qs = [round(elem,2) for elem in des_qs]
-        
-        print(des_qs)
-        
-        encoder_vals = self.angle_to_encoder(des_qs)
-        
-        vals = Int16MultiArray()
-        vals.data = encoder_vals
-        
-        print(encoder_vals)
-        
-        self.kinematics_pub.publish(vals)
-        
-        #then publish these.. need to put back into deg then encoder value
-        
-        # [-8.586421686070536e-19, 1.2806424677342814, -0.23449172978713778, 1.32853076887559, 5.99694604648262e-19] in radians
         
     
     def angle_to_encoder(self, angles):
