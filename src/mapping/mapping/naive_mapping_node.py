@@ -15,15 +15,15 @@ from tf2_geometry_msgs.tf2_geometry_msgs import do_transform_point
 
 class NaiveMappingNode(Node):
     MAP_TOPIC = '/global_map'
-    MAP_WIDTH = 9
-    MAP_HEIGHT = 6.5
-    MAP_ORIGIN = [-1, -1]
-    MAP_RESOLUTION = 0.03
+    MAP_WIDTH = 12
+    MAP_HEIGHT = 10.5
+    MAP_ORIGIN = [-5, -5]
+    MAP_RESOLUTION = 0.035
     
     def __init__(self):
         super().__init__('naive_mapping_node')
         
-        self.tf2_buf = Buffer(cache_time=rclpy.duration.Duration(seconds=5))
+        self.tf2_buf = Buffer(cache_time=rclpy.duration.Duration(seconds=10))
         self.tf_listener = TransformListener(self.tf2_buf, self)
         
         self.scan_sub = self.create_subscription(LaserScan, '/scan', self.scan_cb, 12)
@@ -48,6 +48,7 @@ class NaiveMappingNode(Node):
         self.MAX_X = int(self.MAP_WIDTH / self.MAP_RESOLUTION)
         self.MAX_Y = int(self.MAP_HEIGHT / self.MAP_RESOLUTION)
         self.UPDATE_TRHESH = 3
+        self.MIN_RANGE_FILTER_THRESH = 0.2 # m
         
     def scan_cb(self, msg:LaserScan):
         # -- get current position of the robot --
@@ -57,10 +58,11 @@ class NaiveMappingNode(Node):
         
         # print("robot location {}".format(robot_loc))
         
-        # -- filter range-bearings --
+        # -- filter range-bearings -- 
         mask = np.isfinite(np.array(msg.ranges))
+        mask = np.where((np.array(msg.ranges) > self.MIN_RANGE_FILTER_THRESH) * mask, 1, 0)
         ranges = np.array(msg.ranges)[mask == 1]
-        bearings = np.arange(msg.angle_min, msg.angle_max, msg.angle_increment)[mask == 1]
+        bearings = np.arange(msg.angle_min, msg.angle_max+msg.angle_increment, msg.angle_increment)[mask == 1]
         
         # -- map all range-bearing to points --
         x = np.cos(bearings) * ranges
@@ -93,7 +95,7 @@ class NaiveMappingNode(Node):
             
         # -- map points to cell location --
         points_map = (points_map / self.MAP_RESOLUTION).astype(np.int32)
-        mask = np.where((points_map[0] < self.MAX_X) * (points_map[1] < self.MAX_Y), 1, 0)
+        mask = np.where((points_map[0] < self.MAX_X) * (points_map[1] < self.MAX_Y) * (points_map[0] >= 0) * (points_map[1] >= 0), 1, 0)
         points_map = points_map[:, mask==1]
         
         # -- add points to the candidate map --
@@ -121,14 +123,14 @@ class NaiveMappingNode(Node):
         loc.header.stamp = stamp
         loc.header.frame_id = 'odom'
 
-        timeout = rclpy.duration.Duration(seconds=1.0)
+        timeout = rclpy.duration.Duration()
         can_transform = self.tf2_buf.can_transform('odom', 'base_link', stamp, timeout)
         if not can_transform:
             print('transform unavailable')
             return None
         
         try:
-            transform = self.tf2_buf.lookup_transform('odom', 'base_link', stamp, timeout)
+            transform = self.tf2_buf.lookup_transform('odom', 'base_link', stamp)
         except TransformException as ex:
             print(ex)
             return None
