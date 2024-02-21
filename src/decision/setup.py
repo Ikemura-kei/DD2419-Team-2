@@ -23,8 +23,8 @@ setup(
             'ms1_go_to_obj_node = decision.ms1_go_to_obj_node:main',
             'ms1_go_to_obj_node_v2 = decision.ms1_go_to_obj_node_v2:main',
             'ms1_pick_and_place_node = decision.ms1_pick_and_place_node:main',
-            'ms2_decision_tree_node = decision.ms2_decision_tree_node:main',,
-            'ms2_go_to_obj_planning_node = decision.ms2_go_to_obj_planning_node:main'
+            'ms2_decision_tree_node = decision.ms2_decision_tree_node:main',
+            'ms2_go_to_obj_planning_node = decision.ms2_go_to_obj_planning_node:main',
         ],
     },
 )
