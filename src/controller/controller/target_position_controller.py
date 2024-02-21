@@ -1,13 +1,10 @@
-from sensor_msgs.msg import PointCloud2
 import sensor_msgs_py.point_cloud2 as pc2
 from geometry_msgs.msg import Twist
 from sensor_msgs.msg import Joy
-from geometry_msgs.msg import Point, PoseStamped
+from geometry_msgs.msg import Point
 
 from tf2_ros.buffer import Buffer
 from tf2_ros.transform_listener import TransformListener
-
-from geometry_msgs.msg import PointStamped
 
 import rclpy
 from rclpy.node import Node
@@ -37,16 +34,11 @@ class TargetPositionController(Node):
         #transform listener fills the buffer
         self.listener = TransformListener(self.tf2Buffer, self)
 
-        self._pub = self.create_publisher(
+        self._twist_publisher = self.create_publisher(
             Twist, '/simulation/cmd_vel', 10)
         
-        self._pub2 = self.create_publisher(
-            PointStamped, '/clicked_point', 10)
-        
-        self.publisher_ = self.create_publisher(String, 'task_completion', 10)
-        
-        self.joy_sub = self.create_subscription(Joy, '/joy', self.joy_command_cb, 10)
-        
+        self._completion_publisher = self.create_publisher(String, 'task_completion', 10)
+                
         self.goal_sub = self.create_subscription(Point, '/target_position', self.target_position_cb, 10)
 
         # Timer to publish commands every 100 milliseconds (10 Hz)
@@ -56,7 +48,7 @@ class TargetPositionController(Node):
     def publish_completion(self):
         msg = String()
         msg.data = 'Task completed'
-        self.publisher_.publish(msg)
+        self._completion_publisher.publish(msg)
         self.get_logger().info('Published task completion')
         
     def target_position_cb(self, msg:Point):
@@ -64,18 +56,7 @@ class TargetPositionController(Node):
         stamp = rclpy.time.Time()
 
         self.goal_t = stamp
-        self.target_x, self.target_y = msg.x, msg.y
-    
-    def publish_point(self):
-        if self.target_x is None or self.target_y is None:
-            return
-        pointStamped = PointStamped()
-        pointStamped.header.stamp = self.goal_t.to_msg()
-        pointStamped.header.frame_id = 'odom'
-        pointStamped.point.x = self.target_x
-        pointStamped.point.y = self.target_y
-        
-        self._pub2.publish(pointStamped)        
+        self.target_x, self.target_y = msg.x, msg.y       
         
     def joy_command_cb(self, msg:Joy):
         if msg.buttons[1]: #set duty cycle to zero if red button pressed
@@ -144,7 +125,7 @@ class TargetPositionController(Node):
              twist_msg.angular.z = 0.0
              
         # TO TEST: Publish the DutyCycles message
-        self._pub.publish(twist_msg)
+        self._twist_publisher.publish(twist_msg)
 
 def main():
     rclpy.init()
