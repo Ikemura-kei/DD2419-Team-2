@@ -1,4 +1,5 @@
 from rclpy.node import Node
+from rclpy.action import ActionServer
 import rclpy
 from sensor_msgs.msg import Joy, JointState
 from std_msgs.msg import Int16MultiArray, MultiArrayDimension, Float32MultiArray
@@ -11,6 +12,9 @@ from tf2_ros import TransformBroadcaster
 from tf_transformations import quaternion_from_matrix, quaternion_matrix
 from geometry_msgs.msg import TransformStamped, PoseStamped
 import tf2_geometry_msgs
+
+from action_msgs.msg import GoalStatus
+from action_interfaces.action import IK
 
 # "{layout: {dim: [{label: '', size: 0, stride: 0}], data_offset: 0}, data: [12000,12000,12000,12000,12000,12000,500,500,500,500,500,500]}"
 
@@ -40,9 +44,9 @@ LX16AServo servo5(&servoBus, 5); // 0-24000 (0-240 degrees)
 LX16AServo servo6(&servoBus, 6); // 0-24000 (0-240 degrees)
 '''
 
-class ForwardKinematics(Node):
+class InverseKinematics(Node):
     def __init__(self):
-        super().__init__('forward_kinematics')
+        super().__init__('inverse_kinematics')
         
         self.joint_pos_sub = self.create_subscription(JointState, topic='/servo_pos_publisher', callback=self.joint_pos_cb, qos_profile=10)
         self.joint_cmd_sub = self.create_subscription(Int16MultiArray, '/multi_servo_cmd_sub', callback=self.joint_cmd_cb, qos_profile=10)
@@ -53,6 +57,10 @@ class ForwardKinematics(Node):
         
         self.joycon_sub = self.create_subscription(Joy, topic='/joy', callback=self.joy_cb, qos_profile=10)
         self.joint_cmd_pub = self.create_publisher(Int16MultiArray, '/multi_servo_cmd_sub', 10)
+        
+        
+        
+        self._action_server = ActionServer(self, IK, 'ik', self.ik_cb_as) #creating an action server!
         
         
         # Initialize the transform listener and assign it a buffer
@@ -98,7 +106,104 @@ class ForwardKinematics(Node):
         
         self.desired_encoder_vals = [12000, 12000, 12000, 12000, 12000]
         
+    
+    def ik_cb_as(self, goal_handle):
+        self.get_logger().info('Executing goal...') # it is in executing state.. for now, go to succeeded but response may still be fail.
         
+        # print(goal_handle.__dir__()) # 'request', 'goal_id', 'is_active', 'is_cancel_requested', 'status', '_update_state', 'execute', 'publish_feedback', 'succeed', 'abort', 'canceled', 'destroy'
+        
+        goal_handle.success()
+        result = IK.Result()
+        
+        obj = goal_handle.request.goal_point # this is goal from action client
+        
+        print("Received Goal for IK!")
+        
+        obj_stamp = obj.header.stamp
+        obj_frame = obj.header.frame_id
+        
+        if self.tf2Buffer.can_transform('arm_base', obj_frame, obj_stamp):
+            transform = self.tf2Buffer.lookup_transform('arm_base', obj_frame, obj_stamp)
+            
+            trans_obj = tf2_geometry_msgs.do_transform_point(obj.point, transform)
+            
+            #at this point should have Pose object
+            
+            if (trans_obj.point.z < -0.114) or (trans_obj.point.x > 0.290) or (trans_obj.point.y > 0.210) or (trans_obj.point.y < -0.214):
+                # if it is below floor, too far ahead, too far left or right
+                print("Outside of reachable workspace!!")
+                result.result = 1
+                return result
+            
+            #in bounds so let's process! 
+            
+            print("Object within workspace. Moving arm to init position...")
+            
+            self.joint_angles = [1000, 12000, 5000, 19000, 10000, 12000] #[4200, 12000, 4800, 18574, 11151, 12000]
+            self.joint_times = [DELAY] * 6
+            self.publish_joint_cmd(self.joint_angles, self.joint_times)
+            time_delay = self.get_clock().now()
+            
+            while ((self.get_clock().now() - time_delay).nanoseconds / 1e6 <= DELAY):
+                continue
+            
+            print("Done moving arm, now onto ik!")
+            
+            # this just takes the rotation matrix of the pose and keeps it. This will change when we know PoseStamped. Currently have PointStamped
+            trans_obj_r = self.t1 @ self.t2 @ self.t3 @ self.t4 @ self.t5
+            # trans_obj_r = quaternion_matrix([trans_obj.orientation.x, trans_obj.orientation.y, trans_obj.orientation.z, trans_obj.orientation.w])
+            
+            trans_obj_r[0,3] = trans_obj.point.x
+            trans_obj_r[1,3] = trans_obj.point.y
+            trans_obj_r[2,3] = trans_obj.point.z
+
+            
+            desired_pose = np.array(trans_obj_r).reshape((4,4))
+            
+            r_des = desired_pose[0:3, 0:3]
+            position_des = [desired_pose[0,3],desired_pose[1,3], desired_pose[2,3]]            
+            
+            print("Solving now...")    
+                
+            res , des_qs = self.solve_ik(position_des, r_des, self.current_qs)
+            
+            if not res:
+                print("IK did not converge in time!")
+                result.result = 1
+                return result
+            
+            des_qs = [round(elem,2) for elem in des_qs]
+                
+            print([elem* (180/np.pi) for elem in des_qs])
+            
+            self.desired_encoder_vals = self.angle_to_encoder(des_qs)
+            
+            # print(self.desired_encoder_vals)
+            
+            print("Feasible: {}".format(self.sol_feasbile()))
+            
+            if self.sol_feasbile():
+            
+                vals = Int16MultiArray()
+                vals.data = self.desired_encoder_vals
+
+                # ADD THIS WHEN WANT TO MOVE THE ARM
+                # self.kinematics_pub.publish(vals)
+            else:
+                print("Not feasible so exiting!")
+                result.result = 1
+                return result
+        
+        else:
+            print("No transform available!")
+            result.result = 1
+            return result
+        
+        result.result = 0
+        return result
+        
+    
+    
     
     def joy_cb(self, msg:Joy):
         # axes: left-stick horizontal, left-stick verticle, LT, right-stick horizontal, right-stick verticle, RT, left-cross horizontal, left-cross verticle
@@ -596,15 +701,15 @@ class ForwardKinematics(Node):
         self.joint_cmd_pub.publish(self.joint_cmd)
 
 def main():
-    print('Hi from forward_kinematics.')
+    print('Hi from inverse_kinematics.')
     
     rclpy.init()
     
-    forward_kinematics = ForwardKinematics()
+    inverse_kinematics = InverseKinematics()
     
-    rclpy.spin(forward_kinematics)
+    rclpy.spin(inverse_kinematics)
     
-    forward_kinematics.destroy_node()
+    inverse_kinematics.destroy_node()
     
     rclpy.shutdown()
 
