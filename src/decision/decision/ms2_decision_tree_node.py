@@ -52,10 +52,13 @@ class CheckCubeDetectedBehaviour(py_trees.behaviour.Behaviour):
             if (time-self.start_time) > 6:
                 current_detection = True
         else:
+            current_detection = False
             if self.blackboard.exists('object') and (self.blackboard.get('object') is not None):
-                current_detection = True
-            else:
-                current_detection = False
+                objs = self.blackboard.get('object')
+                for marker in objs.markers:
+                    if not 'blue' in marker.ns:
+                        continue
+                    current_detection = True
         
         if (not current_detection) and dt < self.CHECK_PERIOD: # we check only once in a while, unless detection occurs
             return self.last_status
