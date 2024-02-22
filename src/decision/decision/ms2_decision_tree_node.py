@@ -8,6 +8,8 @@ import py_trees.console as console
 # -- ros msgs --
 from nav_msgs.msg import OccupancyGrid
 from builtin_interfaces.msg import Time
+from visualization_msgs.msg import Marker, MarkerArray
+from aruco_msgs.msg import MarkerArray as ArucoMarkerArray
 # -- other stuff --
 import os, sys
 
@@ -21,7 +23,7 @@ class CheckCubeDetectedBehaviour(py_trees.behaviour.Behaviour):
         self.name = name
         self.blackboard = self.attach_blackboard_client(self.name)
         self.blackboard.register_key(
-                key="time",
+                key="object",
                 access=py_trees.common.Access.READ
             )
         self.CHECK_PERIOD = 0.1 # seconds
@@ -45,11 +47,15 @@ class CheckCubeDetectedBehaviour(py_trees.behaviour.Behaviour):
         
         dt = time - self.last_check_time
         
-        # -- TODO: listen to blackboard variable for actual detection check --
         if self.DEBUG:
             current_detection = False # !! debug !!
             if (time-self.start_time) > 6:
                 current_detection = True
+        else:
+            if self.blackboard.exists('object') and (self.blackboard.get('object') is not None):
+                current_detection = True
+            else:
+                current_detection = False
         
         if (not current_detection) and dt < self.CHECK_PERIOD: # we check only once in a while, unless detection occurs
             return self.last_status
@@ -249,6 +255,8 @@ def create_root():
     topics2bb = py_trees.composites.Sequence(name='topics2bb', memory=True)
     # -- map topic --
     map2bb = ptr.subscribers.ToBlackboard('map2bb', '/map', OccupancyGrid, 10, {})
+    object2bb = ptr.subscribers.ToBlackboard('object2bb', '/object_centers', MarkerArray, 10, {}, blackboard_variables='object', clearing_policy=py_trees.common.ClearingPolicy.ON_INITIALISE) # make sure we clear the detection so that we can perform missing check
+    aruco2bb = ptr.subscribers.ToBlackboard('aruco2bb', '/aruco/markers', ArucoMarkerArray, 10, {}, blackboard_variables='aruco', clearing_policy=py_trees.common.ClearingPolicy.ON_INITIALISE)
     task = py_trees.composites.Sequence(name="task", memory=True) # memory must set to True
     
     # -- second level nodes --
