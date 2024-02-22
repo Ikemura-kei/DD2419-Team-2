@@ -10,8 +10,9 @@ from tf2_ros.buffer import Buffer
 from tf2_ros.transform_listener import TransformListener
 from tf2_ros import TransformBroadcaster
 from tf_transformations import quaternion_from_matrix, quaternion_matrix
-from geometry_msgs.msg import TransformStamped, PoseStamped
+from geometry_msgs.msg import TransformStamped, PoseStamped, PointStamped
 import tf2_geometry_msgs
+from visualization_msgs.msg import MarkerArray
 
 from action_msgs.msg import GoalStatus
 from action_interfaces.action import IK
@@ -20,7 +21,10 @@ from action_interfaces.action import IK
 
 ANGLE_LIMITS_LOW = [1000, 3100, 2000, 7000, 3500, 8200]
 ANGLE_LIMITS_HIGH = [12050, 21500, 20500, 23000, 16000, 16500]
+STRAIGHT = [1000, 12000, 12000, 12000, 12000, 12000]
 
+PICK_READY = [1000, 12000, 5000, 19000, 10000, 12000]
+MOVE_W_OBJ = [11050, 12000, 5000, 19000, 10000, 12000]
 
 
 ANGLE_HOMES = [12000, 12000, 12000, 12000, 12000] #keeping all but the ee
@@ -106,6 +110,29 @@ class InverseKinematics(Node):
         
         self.desired_encoder_vals = [12000, 12000, 12000, 12000, 12000]
         
+        #BEFORE ANY IK, NEED TO SEND COMMAND HOME. THIS CREATES ALL TRANSFORMS AS WELL
+        # self.move_arm(STRAIGHT)
+        
+        self.object_sub = self.create_subscription(MarkerArray, '/object_centers', self.obj_cb, 1)
+        self.update = True
+        
+    def obj_cb(self, msg:MarkerArray):
+        
+        if not self.update:
+            return
+        # print("==> Received number of markers {}".format(len(msg.markers)))
+        for marker in msg.markers:
+            if not 'blue' in marker.ns:
+                continue
+
+            self.obj_positionx = marker.pose.position.x
+            self.obj_positiony = marker.pose.position.y
+            self.obj_positionz = marker.pose.position.z
+            self.obj_stamp = marker.header.stamp
+            self.obj_frame_id = marker.header.frame_id
+            print("==> Object detection")
+            
+            break
     
     def ik_cb_as(self, goal_handle):
         self.get_logger().info('Executing goal...') # it is in executing state.. for now, go to succeeded but response may still be fail.
@@ -139,9 +166,7 @@ class InverseKinematics(Node):
             
             print("Object within workspace. Moving arm to init position...")
             
-            self.joint_angles = [1000, 12000, 5000, 19000, 10000, 12000] #[4200, 12000, 4800, 18574, 11151, 12000]
-            self.joint_times = [DELAY] * 6
-            self.publish_joint_cmd(self.joint_angles, self.joint_times)
+            self.move_arm(PICK_READY)
             time_delay = self.get_clock().now()
             
             while ((self.get_clock().now() - time_delay).nanoseconds / 1e6 <= DELAY):
@@ -155,7 +180,7 @@ class InverseKinematics(Node):
             
             trans_obj_r[0,3] = trans_obj.point.x
             trans_obj_r[1,3] = trans_obj.point.y
-            trans_obj_r[2,3] = trans_obj.point.z
+            trans_obj_r[2,3] = trans_obj.point.z + 0.025 #want to be slightly higher
 
             
             desired_pose = np.array(trans_obj_r).reshape((4,4))
@@ -182,26 +207,161 @@ class InverseKinematics(Node):
             
             print("Feasible: {}".format(self.sol_feasbile()))
             
-            if self.sol_feasbile():
-            
-                vals = Int16MultiArray()
-                vals.data = self.desired_encoder_vals
-
-                # ADD THIS WHEN WANT TO MOVE THE ARM
-                # self.kinematics_pub.publish(vals)
-            else:
+            if not self.sol_feasbile():
                 print("Not feasible so exiting!")
                 result.result = 1
                 return result
+            
+            
+            #this will move the arm
+            self.kinematic_go()
+            time_delay = self.get_clock().now()
+            while ((self.get_clock().now() - time_delay).nanoseconds / 1e6 <= DELAY):
+                continue
+            
+                       
+            # close ee
+            self.kinematic_go(ee_value=11050)
+            time_delay = self.get_clock().now()
+            while ((self.get_clock().now() - time_delay).nanoseconds / 1e6 <= DELAY):
+                continue
+            
+            
+            # move to carrying position
+            self.move_arm(MOVE_W_OBJ)
+            time_delay = self.get_clock().now()
+            while ((self.get_clock().now() - time_delay).nanoseconds / 1e6 <= DELAY):
+                continue
+            
         
         else:
             print("No transform available!")
             result.result = 1
             return result
         
+        
+        #return success from action server
         result.result = 0
         return result
+    
+    
+    
+    
+    
+    def test_this(self):
+        self.get_logger().info('Executing goal...') # it is in executing state.. for now, go to succeeded but response may still be fail.
         
+        # print(goal_handle.__dir__()) # 'request', 'goal_id', 'is_active', 'is_cancel_requested', 'status', '_update_state', 'execute', 'publish_feedback', 'succeed', 'abort', 'canceled', 'destroy'
+        
+
+        print("Received Goal for IK!")
+        
+        obj_stamp = self.obj_stamp
+        obj_frame = self.obj_frame_id
+        
+        if self.tf2Buffer.can_transform('arm_base', obj_frame, obj_stamp):
+            transform = self.tf2Buffer.lookup_transform('arm_base', obj_frame, obj_stamp)
+            
+            p = PointStamped()
+            p.point.x = self.obj_positionx
+            p.point.y = self.obj_positiony
+            p.point.z = self.obj_positionz
+            
+            self.update = True
+            
+            trans_obj = tf2_geometry_msgs.do_transform_point(p, transform)
+            
+            #at this point should have Pose object
+            
+            print("Point is at:")
+            print(trans_obj.point)
+
+            
+            if (trans_obj.point.z < -0.114) or (trans_obj.point.x > 0.290) or (trans_obj.point.y > 0.210) or (trans_obj.point.y < -0.214):
+                # if it is below floor, too far ahead, too far left or right
+                print("Outside of reachable workspace!!")
+                return
+            
+            #in bounds so let's process! 
+            
+            print("Object within workspace. Moving arm to init position...")
+            
+            self.move_arm(PICK_READY)
+            time_delay = self.get_clock().now()
+            
+            while ((self.get_clock().now() - time_delay).nanoseconds / 1e6 <= DELAY):
+                continue
+            
+            print("Done moving arm, now onto ik!")
+            
+            # this just takes the rotation matrix of the pose and keeps it. This will change when we know PoseStamped. Currently have PointStamped
+            trans_obj_r = self.t1 @ self.t2 @ self.t3 @ self.t4 @ self.t5
+            # trans_obj_r = quaternion_matrix([trans_obj.orientation.x, trans_obj.orientation.y, trans_obj.orientation.z, trans_obj.orientation.w])
+            
+            trans_obj_r[0,3] = trans_obj.point.x
+            trans_obj_r[1,3] = trans_obj.point.y
+            trans_obj_r[2,3] = trans_obj.point.z + 0.025 #want to be slightly higher
+
+            
+            desired_pose = np.array(trans_obj_r).reshape((4,4))
+            
+            r_des = desired_pose[0:3, 0:3]
+            position_des = [desired_pose[0,3],desired_pose[1,3], desired_pose[2,3]]            
+            
+            print("Solving now...")    
+                
+            res , des_qs = self.solve_ik(position_des, r_des, self.current_qs)
+            
+            if not res:
+                print("IK did not converge in time!")
+                return
+            
+            des_qs = [round(elem,2) for elem in des_qs]
+                
+            print([elem* (180/np.pi) for elem in des_qs])
+            
+            self.desired_encoder_vals = self.angle_to_encoder(des_qs)
+            
+            # print(self.desired_encoder_vals)
+            
+            print("Feasible: {}".format(self.sol_feasbile()))
+            
+            if not self.sol_feasbile():
+                print("Not feasible so exiting!")
+                return
+            
+            
+            #this will move the arm
+            self.kinematic_go()
+            time_delay = self.get_clock().now()
+            while ((self.get_clock().now() - time_delay).nanoseconds / 1e6 <= DELAY):
+                continue
+            
+                       
+            # close ee
+            self.kinematic_go(ee_value=11050)
+            time_delay = self.get_clock().now()
+            while ((self.get_clock().now() - time_delay).nanoseconds / 1e6 <= DELAY):
+                continue
+            
+            
+            # move to carrying position
+            self.move_arm(MOVE_W_OBJ)
+            time_delay = self.get_clock().now()
+            while ((self.get_clock().now() - time_delay).nanoseconds / 1e6 <= DELAY):
+                continue
+            
+        
+        else:
+            print("No transform available!")
+            self.update = True
+            return
+        
+        
+        #return success from action server
+        print("Success!")
+        self.update = True
+        return
     
     
     
@@ -212,20 +372,19 @@ class InverseKinematics(Node):
         
         if self.joy_cmd.buttons[1]: # red button is pressed.. RESET!!!!!!!!
         
-            self.joint_angles = [1000, 12000, 12000, 12000, 12000, 12000]
-            self.joint_times = [DELAY] * 6
-            self.publish_joint_cmd(self.joint_angles, self.joint_times)
+            self.move_arm(STRAIGHT)
             print("Resetting home")
             
         
         if self.joy_cmd.buttons[2]: # blue button is pressed.. PICKUP CONFIG
         
-            self.joint_angles = [1000, 12000, 5000, 19000, 10000, 12000] #[4200, 12000, 4800, 18574, 11151, 12000]
-            self.joint_times = [DELAY] * 6
-            self.publish_joint_cmd(self.joint_angles, self.joint_times)
+            self.move_arm(PICK_READY)
             print("Init pickup")
         
-        # if self.joy_cmd.buttons[3]: # if Y is pressed. Start IK
+        if self.joy_cmd.buttons[3]: # if Y is pressed. Start IK
+            
+            self.update = False
+            self.test_this()
             
 
             
@@ -640,7 +799,10 @@ class InverseKinematics(Node):
 
 
 
-
+    def move_arm(self, vals):
+        self.joint_angles = vals
+        self.joint_times = [DELAY] * 6
+        self.publish_joint_cmd(self.joint_angles, self.joint_times)
 
 
     def sol_feasbile(self):
@@ -654,9 +816,9 @@ class InverseKinematics(Node):
 
 
 
-    def kinematic_go(self):
+    def kinematic_go(self, ee_value=1000):
         
-        self.joint_angles = [1000, self.desired_encoder_vals[4], self.desired_encoder_vals[3], self.desired_encoder_vals[2], self.desired_encoder_vals[1], self.desired_encoder_vals[0]]
+        self.joint_angles = [ee_value, self.desired_encoder_vals[4], self.desired_encoder_vals[3], self.desired_encoder_vals[2], self.desired_encoder_vals[1], self.desired_encoder_vals[0]]
         self.joint_times = [DELAY] * 6
         print("Moving arm to {}".format(self.joint_angles))
         
