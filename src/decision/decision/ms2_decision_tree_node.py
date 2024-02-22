@@ -113,7 +113,7 @@ class CheckCubeReachedBehaviour(py_trees.behaviour.Behaviour):
         
         if self.DEBUG:
             dt = time - self.start_time
-            if dt > 5:
+            if dt > 10:
                 return py_trees.common.Status.SUCCESS
             
         return py_trees.common.Status.FAILURE
