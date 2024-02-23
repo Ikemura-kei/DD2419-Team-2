@@ -1,4 +1,5 @@
 # -- rclpy stuff --
+from py_trees.common import Status
 import rclpy
 from rclpy.node import Node
 # -- pytree ros stuff --
@@ -10,8 +11,10 @@ from nav_msgs.msg import OccupancyGrid
 from builtin_interfaces.msg import Time
 from visualization_msgs.msg import Marker, MarkerArray
 from aruco_msgs.msg import MarkerArray as ArucoMarkerArray
+from geometry_msgs.msg import Point
 # -- other stuff --
 import os, sys
+import numpy as np
 
 class CheckCubeDetectedBehaviour(py_trees.behaviour.Behaviour):
     def __init__(self, name:str):
@@ -26,12 +29,17 @@ class CheckCubeDetectedBehaviour(py_trees.behaviour.Behaviour):
                 key="object",
                 access=py_trees.common.Access.READ
             )
-        self.CHECK_PERIOD = 0.1 # seconds
+        self.blackboard.register_key(
+                key="plan_goal",
+                access=py_trees.common.Access.WRITE
+            )
+        self.CHECK_PERIOD = 0.2 # seconds
         self.last_status = py_trees.common.Status.FAILURE
         self.N1 = 2 # detection count threshold
         self.N2 = 5 # miss count threshold
         self.start_time = None
-        self.DEBUG = True
+        self.DEBUG = False
+        self.pnt = Point()
         
     def setup(self, **kwargs):
         self.node = kwargs.get('node')
@@ -53,12 +61,21 @@ class CheckCubeDetectedBehaviour(py_trees.behaviour.Behaviour):
                 current_detection = True
         else:
             current_detection = False
+
             if self.blackboard.exists('object') and (self.blackboard.get('object') is not None):
                 objs = self.blackboard.get('object')
                 for marker in objs.markers:
+
                     if not 'blue' in marker.ns:
                         continue
                     current_detection = True
+                    self.pnt.x = marker.pose.position.x + 0.006
+                    self.pnt.y = marker.pose.position.y + 0.068
+                    
+                    break
+            else:
+                # print('no obj')
+                pass
         
         if (not current_detection) and dt < self.CHECK_PERIOD: # we check only once in a while, unless detection occurs
             return self.last_status
@@ -81,6 +98,9 @@ class CheckCubeDetectedBehaviour(py_trees.behaviour.Behaviour):
             if self.det_cnt >= self.N1:
                 self.cube_detected_currently = True
                 self.not_det_cnt = 0
+                
+        if self.cube_detected_currently and self.pnt != Point():
+            self.blackboard.set('plan_goal', self.pnt, overwrite=True)
         
         self.last_status = py_trees.common.Status.SUCCESS if self.cube_detected_currently else py_trees.common.Status.FAILURE
         return self.last_status
@@ -99,7 +119,19 @@ class CheckCubeReachedBehaviour(py_trees.behaviour.Behaviour):
         super().__init__(name=name)
         self.name = name
         self.start_time = None
-        self.DEBUG = True
+        self.DEBUG = False
+        self.blackboard = self.attach_blackboard_client(self.name)
+        self.blackboard.register_key('plan_goal', py_trees.common.Access.READ)
+        
+    def initialise(self) -> None:
+        
+        return super().initialise()
+    
+    def terminate(self, new_status: Status) -> None:
+        if new_status == Status.SUCCESS:
+            self.start_time = None
+        
+        return super().terminate(new_status)
     
     def setup(self, **kwargs):
         self.node = kwargs.get('node')
@@ -113,8 +145,17 @@ class CheckCubeReachedBehaviour(py_trees.behaviour.Behaviour):
         
         if self.DEBUG:
             dt = time - self.start_time
-            # if dt > 10:
-            #     return py_trees.common.Status.SUCCESS
+            if dt > 12:
+                return py_trees.common.Status.SUCCESS
+            
+        else:
+            pnt = self.blackboard.get('plan_goal')
+            dist = np.sqrt((pnt.x)**2 + (pnt.y)**2)
+            if dist < 0.31:
+                return py_trees.common.Status.SUCCESS
+            dt = time - self.start_time
+            if dt > 15:
+                return py_trees.common.Status.SUCCESS
             
         return py_trees.common.Status.FAILURE
 
@@ -122,10 +163,23 @@ class ReachToCubeBehaviour(py_trees.behaviour.Behaviour):
     def __init__(self, name:str):
         super().__init__(name=name)
         self.name = name
+        self.blackboard = self.attach_blackboard_client(self.name)
+        self.blackboard.register_key('plan_goal', py_trees.common.Access.READ)
+        self.goal = Point()
+        
+    def setup(self, **kwargs) -> None:
+        self.node: Node = kwargs.get('node')
+        self.plan_goal_pub = self.node.create_publisher(Point, '/plan_goal', 10)
+        return super().setup(**kwargs)
         
     def update(self):
         # TODO: send reach to object command here. We don't need to judge success or failure, we just rotate and wait to be preempted by condition node(s).
-
+        pnt = self.blackboard.get('plan_goal')
+        diff = np.sqrt((self.goal.x - pnt.x)**2 + (self.goal.y - pnt.y)**2)
+        if diff > 0.05:
+            self.plan_goal_pub.publish(pnt)
+            self.goal.x = pnt.x
+            self.goal.y = pnt.y
         return py_trees.common.Status.RUNNING
 
 class CheckCubePickedBehaviour(py_trees.behaviour.Behaviour):
@@ -146,7 +200,7 @@ class CheckCubePickedBehaviour(py_trees.behaviour.Behaviour):
             return py_trees.common.Status.FAILURE
         
         if self.DEBUG:
-            if (time - self.start_time) > 5:
+            if (time - self.start_time) > 12.5:
                 return py_trees.common.Status.SUCCESS
         
         return py_trees.common.Status.FAILURE
@@ -164,25 +218,93 @@ class PickCubeBehaviour(py_trees.behaviour.Behaviour):
 class CheckBoxDetectedBehaviour(py_trees.behaviour.Behaviour):
     def __init__(self, name:str):
         super().__init__(name=name)
+
+        self.DEBUG = False
+        self.cube_detected_currently = False
+        self.not_det_cnt = 0
+        self.det_cnt = 0
+        self.last_check_time = None
         self.name = name
+        self.blackboard = self.attach_blackboard_client(self.name)
+        self.blackboard.register_key(
+                key="aruco",
+                access=py_trees.common.Access.READ
+            )
+        self.blackboard.register_key(
+                key="plan_goal",
+                access=py_trees.common.Access.WRITE
+            )
+        self.CHECK_PERIOD = 0.2 # seconds
+        self.last_status = py_trees.common.Status.FAILURE
+        self.N1 = 5 # detection count threshold
+        self.N2 = 5 # miss count threshold
         self.start_time = None
-        self.DEBUG = True
+        self.DEBUG = False
+        self.pnt = Point()
         
     def setup(self, **kwargs):
         self.node: Node = kwargs.get('node')
         
     def update(self):
-        time = ptr.conversions.rclpy_time_to_float(self.node.get_clock().now())
+        time = self.node.get_clock().now()
+        time = ptr.conversions.rclpy_time_to_float(time)
         
-        if self.start_time is None:
+        if self.last_check_time is None: # first time coming here
+            self.last_check_time = time
             self.start_time = time
-            return py_trees.common.Status.FAILURE
+            return self.last_status
+        
+        dt = time - self.last_check_time
         
         if self.DEBUG:
-            if (time - self.start_time) > 5:
-                return py_trees.common.Status.SUCCESS
+            current_detection = False # !! debug !!
+            if (time-self.start_time) > 6:
+                current_detection = True
+        else:
+            current_detection = False
+
+            if self.blackboard.exists('aruco') and (self.blackboard.get('aruco') is not None):
+                objs = self.blackboard.get('aruco')
+                for marker in objs.markers:
+
+                    if marker.id != 1:
+                        continue
+                    current_detection = True
+                    self.pnt.x = marker.pose.pose.position.z + 0.26
+                    self.pnt.y = -marker.pose.pose.position.x + 0.05
+                    
+                    break
+            else:
+                # print('no obj')
+                pass
         
-        return py_trees.common.Status.FAILURE
+        if (not current_detection) and dt < self.CHECK_PERIOD: # we check only once in a while, unless detection occurs
+            return self.last_status
+        
+        self.last_check_time = time
+        
+        if current_detection:
+            self.det_cnt += 1
+            self.not_det_cnt = 0 # true detection implies object must be there, so reset not_det_cnt
+        else:
+            self.not_det_cnt += 1 # however, missed detection does not imply missing object, so DO NOT reset det_cnt
+        
+        if self.cube_detected_currently:
+            # -- check for missing --
+            if self.not_det_cnt >= self.N2:
+                self.cube_detected_currently = False
+                self.det_cnt = 0
+        else:
+            # -- check for dectection --
+            if self.det_cnt >= self.N1:
+                self.cube_detected_currently = True
+                self.not_det_cnt = 0
+                
+        if self.cube_detected_currently and self.pnt != Point():
+            self.blackboard.set('plan_goal', self.pnt, overwrite=True)
+        
+        self.last_status = py_trees.common.Status.SUCCESS if self.cube_detected_currently else py_trees.common.Status.FAILURE
+        return self.last_status
 
 class CheckBoxReachedBehabiour(py_trees.behaviour.Behaviour):
     def __init__(self, name:str):
@@ -202,7 +324,7 @@ class CheckBoxReachedBehabiour(py_trees.behaviour.Behaviour):
             return py_trees.common.Status.FAILURE
         
         if self.DEBUG:
-            if (time - self.start_time) > 5:
+            if (time - self.start_time) > 11:
                 return py_trees.common.Status.SUCCESS
         
         return py_trees.common.Status.FAILURE
@@ -211,10 +333,23 @@ class ReachToBoxBehaviour(py_trees.behaviour.Behaviour):
     def __init__(self, name:str):
         super().__init__(name=name)
         self.name = name
+        self.blackboard = self.attach_blackboard_client(self.name)
+        self.blackboard.register_key('plan_goal', py_trees.common.Access.READ)
+        self.goal = Point()
+        
+    def setup(self, **kwargs) -> None:
+        self.node: Node = kwargs.get('node')
+        self.plan_goal_pub = self.node.create_publisher(Point, '/plan_goal', 10)
+        return super().setup(**kwargs)
         
     def update(self):
-        # TODO: send reach box command here. We don't need to judge success or failure, we just rotate and wait to be preempted by condition node(s).
-
+        # TODO: send reach to object command here. We don't need to judge success or failure, we just rotate and wait to be preempted by condition node(s).
+        pnt = self.blackboard.get('plan_goal')
+        diff = np.sqrt((self.goal.x - pnt.x)**2 + (self.goal.y - pnt.y)**2)
+        if diff > 0.008:
+            self.plan_goal_pub.publish(pnt)
+            self.goal.x = pnt.x
+            self.goal.y = pnt.y
         return py_trees.common.Status.RUNNING
 
 class CheckCubePlacedBehaviour(py_trees.behaviour.Behaviour):
@@ -235,8 +370,10 @@ class CheckCubePlacedBehaviour(py_trees.behaviour.Behaviour):
             return py_trees.common.Status.FAILURE
         
         if self.DEBUG:
-            if (time - self.start_time) > 5:
-                return py_trees.common.Status.SUCCESS
+            # if (time - self.start_time) > 12:
+            #     return py_trees.common.Status.SUCCESS
+            
+            pass
             
         return py_trees.common.Status.FAILURE
 
@@ -255,11 +392,11 @@ def create_root():
     root = py_trees.composites.Parallel(name="ms2_decision_tree", policy=py_trees.common.ParallelPolicy.SuccessOnAll(synchronise=False))
     
     # -- first level nodes --
-    topics2bb = py_trees.composites.Sequence(name='topics2bb', memory=True)
+    topics2bb = py_trees.composites.Parallel(name='topics2bb', policy=py_trees.common.ParallelPolicy.SuccessOnAll(synchronise=False))
     # -- map topic --
     map2bb = ptr.subscribers.ToBlackboard('map2bb', '/map', OccupancyGrid, 10, {})
-    object2bb = ptr.subscribers.ToBlackboard('object2bb', '/object_centers', MarkerArray, 10, {}, blackboard_variables='object', clearing_policy=py_trees.common.ClearingPolicy.ON_INITIALISE) # make sure we clear the detection so that we can perform missing check
-    aruco2bb = ptr.subscribers.ToBlackboard('aruco2bb', '/aruco/markers', ArucoMarkerArray, 10, {}, blackboard_variables='aruco', clearing_policy=py_trees.common.ClearingPolicy.ON_INITIALISE)
+    object2bb = ptr.subscribers.ToBlackboard('object2bb', '/object_centers', MarkerArray, 10, blackboard_variables='object', clearing_policy=py_trees.common.ClearingPolicy.ON_INITIALISE) # make sure we clear the detection so that we can perform missing check
+    aruco2bb = ptr.subscribers.ToBlackboard('aruco2bb', '/aruco/markers', ArucoMarkerArray, 10, blackboard_variables='aruco', clearing_policy=py_trees.common.ClearingPolicy.ON_INITIALISE)
     task = py_trees.composites.Sequence(name="task", memory=True) # memory must set to True
     
     # -- second level nodes --
@@ -292,7 +429,7 @@ def create_root():
     # -- level 1 --
     root.add_children([topics2bb, task])
     # -- level 2 --
-    topics2bb.add_children([map2bb])
+    topics2bb.add_children([map2bb, object2bb, aruco2bb])
     task.add_children([detect_and_reach, pick_and_place])
     # -- level 3 --
     detect_and_reach.add_children([make_sure_cube_seen, make_sure_cube_reached])
@@ -329,7 +466,7 @@ def main():
         rclpy.try_shutdown()
         sys.exit(1)
 
-    tree.tick_tock(period_ms=1000.0)
+    tree.tick_tock(period_ms=300.0)
 
     try:
         rclpy.spin(tree.node)
