@@ -21,7 +21,7 @@ class TargetPositionController(Node):
     linear_vel = 0.2
     alpha = 3.25
     # Define a threshold for stopping distance
-    stopping_distance_threshold = 0.125
+    stopping_distance_threshold = 0.23
     angular_threshold = 0.05
     angle_threshold = 0.1
 

@@ -12,9 +12,12 @@ def generate_launch_description():
     chassis_launch = IncludeLaunchDescription(PythonLaunchDescriptionSource(os.path.join(bringup_pkg, 'launch', 'chassis_launch.py')))
     sensor_launch = IncludeLaunchDescription(PythonLaunchDescriptionSource(os.path.join(bringup_pkg, 'launch', 'sensors_launch.py')))
     map_launch = IncludeLaunchDescription(PythonLaunchDescriptionSource(os.path.join(mapping_pkg, 'launch', 'naive_mapping_launch.py')))
-    
-    tar_ctrl_node = Node(package='controller', executable='target_position_controller')
+    aruco_launch = IncludeLaunchDescription(PythonLaunchDescriptionSource(os.path.join(det_pkg, 'launch', 'aruco_detector_launch.py')))
 
-    ld = LaunchDescription([chassis_launch, map_launch, tar_ctrl_node, sensor_launch])
+    tar_ctrl_node = Node(package='controller', executable='target_position_controller')
+    obj_det_node = Node(package='object_detection', executable='object_detection')
+    arm_launch = IncludeLaunchDescription(PythonLaunchDescriptionSource(os.path.join(bringup_pkg, 'launch', 'robo_arm_open_launch.py')))
+
+    ld = LaunchDescription([aruco_launch, arm_launch, obj_det_node, chassis_launch, map_launch, tar_ctrl_node, sensor_launch])
     
     return ld
