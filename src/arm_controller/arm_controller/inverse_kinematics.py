@@ -2,7 +2,7 @@ from rclpy.node import Node
 from rclpy.action import ActionServer
 import rclpy
 from sensor_msgs.msg import Joy, JointState
-from std_msgs.msg import Int16MultiArray, MultiArrayDimension, Float32MultiArray
+from std_msgs.msg import Int16MultiArray, MultiArrayDimension, Float32MultiArray, Int16
 
 import numpy as np
 
@@ -113,26 +113,15 @@ class InverseKinematics(Node):
         #BEFORE ANY IK, NEED TO SEND COMMAND HOME. THIS CREATES ALL TRANSFORMS AS WELL
         # self.move_arm(STRAIGHT)
         
-        self.object_sub = self.create_subscription(MarkerArray, '/object_centers', self.obj_cb, 1)
+        # self.object_sub = self.create_subscription(MarkerArray, '/object_centers', self.obj_cb, 1)
         self.update = True
         
-    def obj_cb(self, msg:MarkerArray):
+        self.pick_sub = self.create_subscription(PointStamped, '/pick_ik', self.obj_cb, 10)
+        self.ik_res = self.create_publisher(Int16, '/ik_res', 1)
         
-        if not self.update:
-            return
-        # print("==> Received number of markers {}".format(len(msg.markers)))
-        for marker in msg.markers:
-            if not 'blue' in marker.ns:
-                continue
-
-            self.obj_positionx = marker.pose.position.x
-            self.obj_positiony = marker.pose.position.y
-            self.obj_positionz = marker.pose.position.z
-            self.obj_stamp = marker.header.stamp
-            self.obj_frame_id = marker.header.frame_id
-            print("==> Object detection")
-            
-            break
+    def obj_cb(self, msg:PointStamped):
+        self.test_this(msg)
+        
     
     def ik_cb_as(self, goal_handle):
         self.get_logger().info('Executing goal...') # it is in executing state.. for now, go to succeeded but response may still be fail.
@@ -175,12 +164,19 @@ class InverseKinematics(Node):
             print("Done moving arm, now onto ik!")
             
             # this just takes the rotation matrix of the pose and keeps it. This will change when we know PoseStamped. Currently have PointStamped
-            trans_obj_r = self.t1 @ self.t2 @ self.t3 @ self.t4 @ self.t5
+            # trans_obj_r = self.t1 @ self.t2 @ self.t3 @ self.t4 @ self.t5
             # trans_obj_r = quaternion_matrix([trans_obj.orientation.x, trans_obj.orientation.y, trans_obj.orientation.z, trans_obj.orientation.w])
+            
+            trans_obj_r = np.array([[1.0, 0.0, 0.0, 0.0],
+                                    [0.0, -1.0, 0.0, 0.0],
+                                    [0.0, 0.0, -1.0, 0.0],
+                                    [0.0, 0.0, 0.0, 1.0]])
             
             trans_obj_r[0,3] = trans_obj.point.x
             trans_obj_r[1,3] = trans_obj.point.y
             trans_obj_r[2,3] = trans_obj.point.z + 0.025 #want to be slightly higher
+            
+            trans_obj_r[2,3] = -0.059
 
             
             desired_pose = np.array(trans_obj_r).reshape((4,4))
@@ -248,38 +244,42 @@ class InverseKinematics(Node):
     
     
     
-    def test_this(self):
+    def test_this(self, p):
         self.get_logger().info('Executing goal...') # it is in executing state.. for now, go to succeeded but response may still be fail.
         
         # print(goal_handle.__dir__()) # 'request', 'goal_id', 'is_active', 'is_cancel_requested', 'status', '_update_state', 'execute', 'publish_feedback', 'succeed', 'abort', 'canceled', 'destroy'
         
+        res_send = Int16()
 
         print("Received Goal for IK!")
         
-        obj_stamp = self.obj_stamp
-        obj_frame = self.obj_frame_id
+        obj_stamp = p.header.stamp
+        obj_frame = p.header.frame_id
+        print(obj_frame)
         
         if self.tf2Buffer.can_transform('arm_base', obj_frame, obj_stamp):
             transform = self.tf2Buffer.lookup_transform('arm_base', obj_frame, obj_stamp)
             
-            p = PointStamped()
-            p.point.x = self.obj_positionx
-            p.point.y = self.obj_positiony
-            p.point.z = self.obj_positionz
+            # p = PointStamped()
+            # p.point.x = self.obj_positionx
+            # p.point.y = self.obj_positiony
+            # p.point.z = self.obj_positionz
             
             self.update = True
             
             trans_obj = tf2_geometry_msgs.do_transform_point(p, transform)
             
             #at this point should have Pose object
-            
+
+            trans_obj.point.z = -0.059
             print("Point is at:")
             print(trans_obj.point)
-
             
-            if (trans_obj.point.z < -0.114) or (trans_obj.point.x > 0.290) or (trans_obj.point.y > 0.210) or (trans_obj.point.y < -0.214):
+            if (trans_obj.point.z < -0.114) or (trans_obj.point.x > 0.310) or (trans_obj.point.y > 0.210) or (trans_obj.point.y < -0.214): #or (trans_obj.point.x > 0.290)
                 # if it is below floor, too far ahead, too far left or right
                 print("Outside of reachable workspace!!")
+                res_send.data = 1
+                self.ik_res.publish(res_send)
                 return
             
             #in bounds so let's process! 
@@ -295,12 +295,17 @@ class InverseKinematics(Node):
             print("Done moving arm, now onto ik!")
             
             # this just takes the rotation matrix of the pose and keeps it. This will change when we know PoseStamped. Currently have PointStamped
-            trans_obj_r = self.t1 @ self.t2 @ self.t3 @ self.t4 @ self.t5
+            # trans_obj_r = self.t1 @ self.t2 @ self.t3 @ self.t4 @ self.t5
             # trans_obj_r = quaternion_matrix([trans_obj.orientation.x, trans_obj.orientation.y, trans_obj.orientation.z, trans_obj.orientation.w])
+            
+            trans_obj_r = np.array([[1.0, 0.0, 0.0, 0.0],
+                                    [0.0, -1.0, 0.0, 0.0],
+                                    [0.0, 0.0, -1.0, 0.0],
+                                    [0.0, 0.0, 0.0, 1.0]])
             
             trans_obj_r[0,3] = trans_obj.point.x
             trans_obj_r[1,3] = trans_obj.point.y
-            trans_obj_r[2,3] = trans_obj.point.z + 0.025 #want to be slightly higher
+            trans_obj_r[2,3] = trans_obj.point.z
 
             
             desired_pose = np.array(trans_obj_r).reshape((4,4))
@@ -314,6 +319,8 @@ class InverseKinematics(Node):
             
             if not res:
                 print("IK did not converge in time!")
+                res_send.data = 1
+                self.ik_res.publish(res_send)
                 return
             
             des_qs = [round(elem,2) for elem in des_qs]
@@ -328,6 +335,8 @@ class InverseKinematics(Node):
             
             if not self.sol_feasbile():
                 print("Not feasible so exiting!")
+                res_send.data = 1
+                self.ik_res.publish(res_send)
                 return
             
             
@@ -355,12 +364,16 @@ class InverseKinematics(Node):
         else:
             print("No transform available!")
             self.update = True
+            res_send.data = 1
+            self.ik_res.publish(res_send)
             return
         
         
         #return success from action server
         print("Success!")
         self.update = True
+        res_send.data = 0
+        self.ik_res.publish(res_send)
         return
     
     
@@ -381,10 +394,10 @@ class InverseKinematics(Node):
             self.move_arm(PICK_READY)
             print("Init pickup")
         
-        if self.joy_cmd.buttons[3]: # if Y is pressed. Start IK
+        # if self.joy_cmd.buttons[3]: # if Y is pressed. Start IK
             
-            self.update = False
-            self.test_this()
+        #     self.update = False
+        #     self.test_this()
             
 
             
@@ -453,12 +466,12 @@ class InverseKinematics(Node):
         #     print("Feasible: {}".format(self.sol_feasbile()))
             
         
-        if self.joy_cmd.buttons[0]: # if A is pressed. Move arm to position!
+        # if self.joy_cmd.buttons[0]: # if A is pressed. Move arm to position!
             
-            if self.sol_feasbile():
-                self.kinematic_go()
-            else:
-                print("It ain't feasible so I ain't goin!")
+        #     if self.sol_feasbile():
+        #         self.kinematic_go()
+        #     else:
+        #         print("It ain't feasible so I ain't goin!")
     
     def joint_cmd_cb(self, msg:Int16MultiArray):
         assert len(msg.data) == 12
@@ -729,7 +742,7 @@ class InverseKinematics(Node):
 
 
         max_error = 1
-        tolerance = 0.0005
+        tolerance = 0.5
         
         delay_time = self.get_clock().now()
         
@@ -785,16 +798,18 @@ class InverseKinematics(Node):
 
             max_error = np.linalg.norm(error)
 
-            print(max_error)
+        
             
              
         q = np.reshape(q,(5,))
         q = q.tolist()
         
         if ((self.get_clock().now() - delay_time).nanoseconds / 1e6 > timeout):
+            print(max_error)
             return False , q
 
         #return the desired joint params
+        print(max_error)
         return True , q
 
 
