@@ -2,7 +2,7 @@ from rclpy.node import Node
 from rclpy.action import ActionServer
 import rclpy
 from sensor_msgs.msg import Joy, JointState
-from std_msgs.msg import Int16MultiArray, MultiArrayDimension, Float32MultiArray, Int16
+from std_msgs.msg import Int16MultiArray, MultiArrayDimension, Float32MultiArray, Int16, Bool
 
 import numpy as np
 
@@ -117,7 +117,7 @@ class InverseKinematics(Node):
         self.update = True
         
         self.pick_sub = self.create_subscription(PointStamped, '/pick_ik', self.obj_cb, 10)
-        self.ik_res = self.create_publisher(Int16, '/ik_res', 1)
+        self.ik_res = self.create_publisher(Bool, '/ik_res', 10)
         
         self.init_joints()
         
@@ -253,18 +253,19 @@ class InverseKinematics(Node):
         
         # print(goal_handle.__dir__()) # 'request', 'goal_id', 'is_active', 'is_cancel_requested', 'status', '_update_state', 'execute', 'publish_feedback', 'succeed', 'abort', 'canceled', 'destroy'
         
-        res_send = Int16()
+        res_send = Bool()
 
         print("Received Goal for IK!")
         
         obj_stamp = p.header.stamp
+        obj_stamp = rclpy.time.Time()
         obj_frame = p.header.frame_id
         print(obj_frame)
         
         print("Checking transform...")
         timeout = rclpy.duration.Duration(seconds=0.5)
         if self.tf2Buffer.can_transform('arm_base', obj_frame, obj_stamp, timeout):
-            transform = self.tf2Buffer.lookup_transform('arm_base', obj_frame, obj_stamp)
+            transform = self.tf2Buffer.lookup_transform('arm_base', obj_frame, obj_stamp, timeout)
             
             # p = PointStamped()
             # p.point.x = self.obj_positionx
@@ -277,14 +278,14 @@ class InverseKinematics(Node):
             
             #at this point should have Pose object
 
-            trans_obj.point.z = -0.059
+            trans_obj.point.z = -0.0729
             print("Point is at:")
             print(trans_obj.point)
             
             if (trans_obj.point.z < -0.114) or (trans_obj.point.x > 0.310) or (trans_obj.point.y > 0.210) or (trans_obj.point.y < -0.214): #or (trans_obj.point.x > 0.290)
                 # if it is below floor, too far ahead, too far left or right
                 print("Outside of reachable workspace!!")
-                res_send.data = 1
+                res_send.data = False
                 self.ik_res.publish(res_send)
                 return
             
@@ -295,7 +296,7 @@ class InverseKinematics(Node):
             self.move_arm(PICK_READY)
             time_delay = self.get_clock().now()
             
-            while ((self.get_clock().now() - time_delay).nanoseconds / 1e6 <= DELAY):
+            while ((self.get_clock().now() - time_delay).nanoseconds / 1e6 <= (DELAY + 1000)):
                 continue
             
             print("Done moving arm, now onto ik!")
@@ -309,8 +310,8 @@ class InverseKinematics(Node):
                                     [0.0, 0.0, -1.0, 0.0],
                                     [0.0, 0.0, 0.0, 1.0]])
             
-            trans_obj_r[0,3] = trans_obj.point.x
-            trans_obj_r[1,3] = trans_obj.point.y
+            trans_obj_r[0,3] = trans_obj.point.x + 0.055
+            trans_obj_r[1,3] = trans_obj.point.y - 0.025
             trans_obj_r[2,3] = trans_obj.point.z
 
             
@@ -319,13 +320,14 @@ class InverseKinematics(Node):
             r_des = desired_pose[0:3, 0:3]
             position_des = [desired_pose[0,3],desired_pose[1,3], desired_pose[2,3]]            
             
+            print("self: Current qs: {}".format(self.current_qs))
             print("Solving now...")    
-                
-            res , des_qs = self.solve_ik(position_des, r_des, self.current_qs)
+            current_q = self.current_qs.copy()
+            res , des_qs = self.solve_ik(position_des, r_des, current_q)
             
             if not res:
                 print("IK did not converge in time!")
-                res_send.data = 1
+                res_send.data = False
                 self.ik_res.publish(res_send)
                 return
             
@@ -335,13 +337,13 @@ class InverseKinematics(Node):
             
             self.desired_encoder_vals = self.angle_to_encoder(des_qs)
             
-            # print(self.desired_encoder_vals)
+            print(self.desired_encoder_vals)
             
             print("Feasible: {}".format(self.sol_feasbile()))
             
             if not self.sol_feasbile():
                 print("Not feasible so exiting!")
-                res_send.data = 1
+                res_send.data = False
                 self.ik_res.publish(res_send)
                 return
             
@@ -373,7 +375,7 @@ class InverseKinematics(Node):
         else:
             print("No transform available!")
             self.update = True
-            res_send.data = 1
+            res_send.data = False
             self.ik_res.publish(res_send)
             return
         
@@ -381,7 +383,7 @@ class InverseKinematics(Node):
         #return success from action server
         print("Success!")
         self.update = True
-        res_send.data = 0
+        res_send.data = True
         self.ik_res.publish(res_send)
         return
     
@@ -566,12 +568,12 @@ class InverseKinematics(Node):
         t.transform.rotation.z = q[2]
         t.transform.rotation.w = q[3]
         
-        if(joint_num == 5):
-            print("Rotation")
-            print(t.transform.rotation)
-            print()
-            print("Position")
-            print(t.transform.translation)
+        # if(joint_num == 5):
+        #     print("Rotation")
+        #     print(t.transform.rotation)
+        #     print()
+        #     print("Position")
+        #     print(t.transform.translation)
 
         # Send the transformation
         self.tf_broadcaster.sendTransform(t)
@@ -780,7 +782,7 @@ class InverseKinematics(Node):
 
 
         max_error = 1
-        tolerance = 0.5
+        tolerance = 0.0005
         
         delay_time = self.get_clock().now()
         

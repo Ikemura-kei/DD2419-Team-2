@@ -18,19 +18,21 @@ from rclpy.node import Node
 import math
 
 class TargetPositionController(Node):
-    # Target position
-    target_x = None
-    target_y = None
-    
-    linear_vel = 1.05
-    alpha = 4.75
-    # Define a threshold for stopping distance
-    stopping_distance_threshold = 0.125
-    angular_threshold = 0.05
-    angle_threshold = 0.1
 
     def __init__(self):
         super().__init__('target_position_controller')
+        
+        # Target position
+        self.target_x = None
+        self.target_y = None
+        
+        self.linear_vel = 1.05
+        self.alpha = 4.75
+        # Define a threshold for stopping distance
+        self.stopping_distance_threshold = 0.16
+        self.angular_threshold = 0.05
+        self.angle_threshold = 0.1
+        
         self.stop = False
         # Initialize the transform listener and assign it a buffer
         self.tf2Buffer = Buffer(cache_time=None)
@@ -46,7 +48,7 @@ class TargetPositionController(Node):
         
         self.joy_sub = self.create_subscription(Joy, '/joy', self.joy_command_cb, 10)
         
-        self.goal_sub = self.create_subscription(Point, '/plan_goal', self.goal_cb, 10)
+        self.goal_sub = self.create_subscription(PointStamped, '/plan_goal', self.goal_cb, 10)
 
         # Timer to publish commands every 100 milliseconds (10 Hz)
         self.timer1 = self.create_timer(0.1, self.publish_twist)
@@ -55,7 +57,7 @@ class TargetPositionController(Node):
         self.goal_reached_pub = self.create_publisher(
             Bool, '/goal_reached', 10)
         
-    def goal_cb(self, msg:Point): # I DO  NOT THINK THIS TRANSFORM IS NEEDED SINCE POINT IS FROM ODOM FRAME ALREADY!!!!!!!!!!
+    def goal_cb(self, msg:PointStamped): # I DO  NOT THINK THIS TRANSFORM IS NEEDED SINCE POINT IS FROM ODOM FRAME ALREADY!!!!!!!!!!
         # stamp = rclpy.time.Time()
         
         # if not self.tf2Buffer.can_transform('odom', 'base_link', stamp, rclpy.duration.Duration(seconds=0.5)):
@@ -82,9 +84,9 @@ class TargetPositionController(Node):
         
         # print("orig x: {}, orig y: {}".format(msg.x, msg.y))
         # print("x: {}, y: {}".format(self.target_x, self.target_y))
-        
-        self.target_x = msg.x
-        self.target_y = msg.y
+        self.target_stamp = msg.header.stamp
+        self.target_x = msg.point.x
+        self.target_y = msg.point.y
         print("x: {}, y: {}".format(self.target_x, self.target_y))
     
     def publish_point(self):
@@ -92,7 +94,8 @@ class TargetPositionController(Node):
             return
         pointStamped = PointStamped()
         pointStamped.header.stamp = self.get_clock().now().to_msg()
-        pointStamped.header.frame_id = 'odom'
+        pointStamped.header.stamp = self.target_stamp
+        pointStamped.header.frame_id = 'odom' 
         pointStamped.point.x = self.target_x
         pointStamped.point.y = self.target_y
         
@@ -111,11 +114,19 @@ class TargetPositionController(Node):
         child_frame = 'base_link'
         parent_frame = 'odom'
         stamp = rclpy.time.Time()
+        # stamp = self.get_clock().now().to_msg() # THIS ONE DOES NOT WORK!!!!!!!!!!!
         
-        if self.tf2Buffer.can_transform(parent_frame, child_frame, stamp) == 0:
+        timeout = rclpy.duration.Duration(seconds=0.5)
+        if self.tf2Buffer.can_transform(parent_frame, child_frame, stamp, timeout) == 0:
+            print("NO TRANSFORM AVAILABLEEEEEEE!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
             return
-            
-        transform = self.tf2Buffer.lookup_transform(parent_frame, child_frame, stamp)
+        
+        try:   
+            transform = self.tf2Buffer.lookup_transform(parent_frame, child_frame, stamp, timeout)
+            print("Can transform")
+        except TransformException as ex:
+            self.get_logger().info(f'Could not transform: {ex}')
+            return
         robot_x = transform.transform.translation.x
         robot_y = transform.transform.translation.y
         

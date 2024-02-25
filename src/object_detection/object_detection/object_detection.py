@@ -61,6 +61,9 @@ class Detection(Node):
 
 
     def cloud_callback(self, msg: PointCloud2):
+        
+        print("IN CLOUD CALLBACK")
+        print(msg.header.stamp)
 
         # Convert ROS -> NumPy
         gen = pc2.read_points_numpy(msg, skip_nans=True)
@@ -115,12 +118,12 @@ class Detection(Node):
 
 
             if red_color_differences[i] < self.RED_TOLERANCE and dist < self.DIST_THRESHOLD:
-                self.get_logger().info(RED +f"_Red Object detected"+ RESET)
+                # self.get_logger().info(RED +f"_Red Object detected"+ RESET)
                 filtered_points.append([points[i][0], points[i][1], points[i][2], colors[i][0], colors[i][1], colors[i][2]])
                 filtered_points_dictionary['red'].append([points[i][0], points[i][1], points[i][2], colors[i][0], colors[i][1], colors[i][2]])
 
             if green_color_differences[i] < self.GREEN_TOLERANCE and dist < self.DIST_THRESHOLD:
-                self.get_logger().info(GREEN+f"_Green Object detected"+ RESET)
+                # self.get_logger().info(GREEN+f"_Green Object detected"+ RESET)
                 filtered_points.append([points[i][0], points[i][1], points[i][2], colors[i][0], colors[i][1], colors[i][2]])
                 filtered_points_dictionary['green'].append([points[i][0], points[i][1], points[i][2], colors[i][0], colors[i][1], colors[i][2]])
 
@@ -165,7 +168,11 @@ class Detection(Node):
 
     def culc_publish_object_centers(self, filtered_points_dictionary, msg):
 
+            print("IN PUB CALLBACK")
+            print(msg.header.stamp)
             msg_frame = msg.header.frame_id
+            timeout = rclpy.duration.Duration(seconds=0.5)
+            stamp = msg.header.stamp
             
             object_centers = []
 
@@ -188,21 +195,34 @@ class Detection(Node):
                     center_x = centroid[0]
                     center_y = centroid[1]
                     center_z = centroid[2]
+                    
 
+                    # if not (self.tf_buffer.can_transform('odom', msg_frame, msg.header.stamp, timeout)):
+                    #     return
                     try:
                         t = self.tf_buffer.lookup_transform(
                             'odom', 
-                            msg_frame,
-                            rclpy.time.Time())
+                            'base_link',
+                            rclpy.time.Time(),
+                            timeout)
+                        # print("time.Time")
+                        # print(rclpy.time.Time())
+                        # print()
+                        # print("msg.header.stamp")
+                        # print(msg.header.stamp)
+                        # print()
+                        # print("self.")
+                        # print(self.get_clock().now())
+                        # print()
                         
                     except TransformException as ex:
                             self.get_logger().info(
                                 f'Could not transform: {ex}')
                             return
                     
-                    marker.pose.position.x = t.transform.translation.x + center_z
-                    marker.pose.position.y = t.transform.translation.y - center_x 
-                    marker.pose.position.z = t.transform.translation.z - center_y 
+                    marker.pose.position.x = t.transform.translation.x + center_z + 0.08987
+                    marker.pose.position.y = t.transform.translation.y - center_x + 0.0175
+                    marker.pose.position.z = t.transform.translation.z - center_y + 0.10456
                     marker.lifetime = Duration(sec=1, nanosec=0)
                     marker.scale.x = 0.01  # Adjust the scale as needed
                     marker.scale.y = 0.01

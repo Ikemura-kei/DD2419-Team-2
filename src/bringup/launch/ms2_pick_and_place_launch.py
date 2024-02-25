@@ -12,8 +12,9 @@ def generate_launch_description():
     ik_launch = IncludeLaunchDescription(PythonLaunchDescriptionSource(os.path.join(bringup_pkg, 'launch', 'robo_arm_ik_launch.py')))
     
     obj_det_node = Node(package='object_detection', executable='object_detection')
-    tar_ctrl_node = Node(package='controller', executable='target_position_controller')
-    dec_node = Node(package='decision', executable='ms2_pick_and_place_node')
+    tar_ctrl_node = Node(package='controller', executable='target_position_controller', output="screen")
+    dec_node = Node(package='decision', executable='ms2_pick_and_place_node', output="screen")
     ld = LaunchDescription([chassis_launch, tar_ctrl_node, dec_node, sensor_launch, obj_det_node, ik_launch])
+    # ld = LaunchDescription([chassis_launch, dec_node, sensor_launch, ik_launch])
     
     return ld
