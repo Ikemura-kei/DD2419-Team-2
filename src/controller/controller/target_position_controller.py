@@ -7,6 +7,8 @@ from tf2_geometry_msgs.tf2_geometry_msgs import do_transform_pose_stamped
 
 from tf2_ros.buffer import Buffer
 from tf2_ros.transform_listener import TransformListener
+from tf2_ros import TransformException
+from std_msgs.msg import Bool
 
 from geometry_msgs.msg import PointStamped
 
@@ -47,25 +49,42 @@ class TargetPositionController(Node):
         self.goal_sub = self.create_subscription(Point, '/plan_goal', self.goal_cb, 10)
 
         # Timer to publish commands every 100 milliseconds (10 Hz)
-        self.timer = self.create_timer(0.1, self.publish_twist)
-        self.timer = self.create_timer(0.1, self.publish_point)
+        self.timer1 = self.create_timer(0.1, self.publish_twist)
+        self.timer2 = self.create_timer(0.1, self.publish_point)
         
-    def goal_cb(self, msg:Point):
-        stamp = rclpy.time.Time()
+        self.goal_reached_pub = self.create_publisher(
+            Bool, '/goal_reached', 10)
         
-        transform_base2odom = self.tf2Buffer.lookup_transform('odom', 'base_link', stamp)
-        target_pose = PoseStamped()
-        target_pose.header.frame_id = 'base_link'
-        target_pose.header.stamp = stamp.to_msg()
-        target_pose.pose.position.x = msg.x
-        target_pose.pose.position.y = msg.y
-        target_pose.pose.orientation.w = 1.0
-        target_pose.pose.orientation.x = target_pose.pose.orientation.y = target_pose.pose.orientation.z = 0.0
-        target_pose = do_transform_pose_stamped(target_pose, transform_base2odom)
+    def goal_cb(self, msg:Point): # I DO  NOT THINK THIS TRANSFORM IS NEEDED SINCE POINT IS FROM ODOM FRAME ALREADY!!!!!!!!!!
+        # stamp = rclpy.time.Time()
         
-        self.target_x = target_pose.pose.position.x
-        self.target_y = target_pose.pose.position.y
-        print("orig x: {}, orig y: {}".format(msg.x, msg.y))
+        # if not self.tf2Buffer.can_transform('odom', 'base_link', stamp, rclpy.duration.Duration(seconds=0.5)):
+        #     print('transform from base_link to odom not available.')
+        
+        # try:
+        #      transform_base2odom = self.tf2Buffer.lookup_transform('odom', 'base_link', stamp, rclpy.duration.Duration(seconds=0.5))
+        # except TransformException as ex:
+        #     print(ex)
+        #     return
+        
+        # transform_base2odom = self.tf2Buffer.lookup_transform('odom', 'base_link', stamp)
+        # target_pose = PoseStamped()
+        # target_pose.header.frame_id = 'base_link'
+        # target_pose.header.stamp = stamp.to_msg()
+        # target_pose.pose.position.x = msg.x
+        # target_pose.pose.position.y = msg.y
+        # target_pose.pose.orientation.w = 1.0
+        # target_pose.pose.orientation.x = target_pose.pose.orientation.y = target_pose.pose.orientation.z = 0.0
+        # target_pose = do_transform_pose_stamped(target_pose, transform_base2odom)
+        
+        # self.target_x = target_pose.pose.position.x
+        # self.target_y = target_pose.pose.position.y
+        
+        # print("orig x: {}, orig y: {}".format(msg.x, msg.y))
+        # print("x: {}, y: {}".format(self.target_x, self.target_y))
+        
+        self.target_x = msg.x
+        self.target_y = msg.y
         print("x: {}, y: {}".format(self.target_x, self.target_y))
     
     def publish_point(self):
@@ -77,10 +96,10 @@ class TargetPositionController(Node):
         pointStamped.point.x = self.target_x
         pointStamped.point.y = self.target_y
         
-        self._pub2.publish(pointStamped)        
+        self._pub2.publish(pointStamped)
         
     def joy_command_cb(self, msg:Joy):
-        if msg.buttons[1]: #set duty cycle to zero if red button pressed
+        if msg.buttons[1]: #set duty cycle to zero if red button held
             self.stop = True
         else:
             self.stop = False
@@ -136,6 +155,9 @@ class TargetPositionController(Node):
             # Set linear velocity to zero to stop the robot
             twist_msg.linear.x = 0.0
             self.target_x = self.target_y = None
+            reached = Bool()
+            reached.data = True
+            self.goal_reached_pub.publish(reached)
         else:
             twist_msg.linear.x = self.linear_vel
             

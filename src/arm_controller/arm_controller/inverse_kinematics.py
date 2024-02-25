@@ -119,6 +119,10 @@ class InverseKinematics(Node):
         self.pick_sub = self.create_subscription(PointStamped, '/pick_ik', self.obj_cb, 10)
         self.ik_res = self.create_publisher(Int16, '/ik_res', 1)
         
+        self.init_joints()
+        
+        self.timer = self.create_timer(0.1, self.publish_joints)    
+        
     def obj_cb(self, msg:PointStamped):
         self.test_this(msg)
         
@@ -128,7 +132,7 @@ class InverseKinematics(Node):
         
         # print(goal_handle.__dir__()) # 'request', 'goal_id', 'is_active', 'is_cancel_requested', 'status', '_update_state', 'execute', 'publish_feedback', 'succeed', 'abort', 'canceled', 'destroy'
         
-        goal_handle.success()
+        goal_handle.succeed()
         result = IK.Result()
         
         obj = goal_handle.request.goal_point # this is goal from action client
@@ -257,7 +261,9 @@ class InverseKinematics(Node):
         obj_frame = p.header.frame_id
         print(obj_frame)
         
-        if self.tf2Buffer.can_transform('arm_base', obj_frame, obj_stamp):
+        print("Checking transform...")
+        timeout = rclpy.duration.Duration(seconds=0.5)
+        if self.tf2Buffer.can_transform('arm_base', obj_frame, obj_stamp, timeout):
             transform = self.tf2Buffer.lookup_transform('arm_base', obj_frame, obj_stamp)
             
             # p = PointStamped()
@@ -341,23 +347,26 @@ class InverseKinematics(Node):
             
             
             #this will move the arm
+            print("Moving arm to goal")
             self.kinematic_go()
             time_delay = self.get_clock().now()
-            while ((self.get_clock().now() - time_delay).nanoseconds / 1e6 <= DELAY):
+            while ((self.get_clock().now() - time_delay).nanoseconds / 1e6 <= (DELAY + 1000)):
                 continue
             
                        
             # close ee
+            print("Picking up!")
             self.kinematic_go(ee_value=11050)
             time_delay = self.get_clock().now()
-            while ((self.get_clock().now() - time_delay).nanoseconds / 1e6 <= DELAY):
+            while ((self.get_clock().now() - time_delay).nanoseconds / 1e6 <= (DELAY + 1000)):
                 continue
             
             
             # move to carrying position
+            print("Moving to carrying position")
             self.move_arm(MOVE_W_OBJ)
             time_delay = self.get_clock().now()
-            while ((self.get_clock().now() - time_delay).nanoseconds / 1e6 <= DELAY):
+            while ((self.get_clock().now() - time_delay).nanoseconds / 1e6 <= (DELAY + 1000)):
                 continue
             
         
@@ -473,6 +482,32 @@ class InverseKinematics(Node):
         #     else:
         #         print("It ain't feasible so I ain't goin!")
     
+    def init_joints(self):
+        
+        self.q1 = self.current_qs[0]
+        self.q2 = self.current_qs[1]
+        self.q3 = self.current_qs[2]
+        self.q4 = self.current_qs[3]
+        self.q5 = self.current_qs[4]
+        
+        self.t1 = self.homo_trans(self.q1, np.pi/2, 0, D1)
+        self.t2 = self.homo_trans(self.q2, np.pi, A2, 0)
+        self.t3 = self.homo_trans(self.q3, np.pi, A3, 0)
+        self.t4 = self.homo_trans(self.q4, np.pi/2, 0, 0)
+        self.t5 = self.homo_trans(self.q5, 0, 0, D5) 
+        
+        self.joint_1 = self.t1
+        self.joint_2 = self.joint_1 @ self.t2
+        self.joint_3 = self.joint_2 @ self.t3
+        self.joint_4 = self.joint_3 @ self.t4
+        self.joint_5 = self.joint_4 @ self.t5
+        
+    
+    def publish_joints(self):
+        
+        self.broadcast_transform(self.joint_5, 5)
+        
+    
     def joint_cmd_cb(self, msg:Int16MultiArray):
         assert len(msg.data) == 12
         
@@ -497,15 +532,18 @@ class InverseKinematics(Node):
         self.t4 = self.homo_trans(self.q4, np.pi/2, 0, 0)
         self.t5 = self.homo_trans(self.q5, 0, 0, D5) 
         
-        print(self.t1 @ self.t2 @ self.t3 @ self.t4 @ self.t5)
-        print()
-        print()
+        self.joint_1 = self.t1
+        self.joint_2 = self.joint_1 @ self.t2
+        self.joint_3 = self.joint_2 @ self.t3
+        self.joint_4 = self.joint_3 @ self.t4
+        self.joint_5 = self.joint_4 @ self.t5
+
         
-        self.broadcast_transform(self.t1, 1)
-        self.broadcast_transform(self.t1 @ self.t2, 2)
-        self.broadcast_transform(self.t1 @ self.t2 @ self.t3, 3)
-        self.broadcast_transform(self.t1 @ self.t2 @ self.t3 @ self.t4, 4)
-        self.broadcast_transform(self.t1 @ self.t2 @ self.t3 @ self.t4 @ self.t5, 5)
+        # self.broadcast_transform(self.joint_1, 1)
+        # self.broadcast_transform(self.joint_2, 2)
+        # self.broadcast_transform(self.joint_3, 3)
+        # self.broadcast_transform(self.joint_4, 4)
+        self.broadcast_transform(self.joint_5, 5)
         
         
     def broadcast_transform(self, trans, joint_num):

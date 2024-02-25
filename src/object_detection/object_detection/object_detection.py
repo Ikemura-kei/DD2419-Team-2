@@ -164,6 +164,8 @@ class Detection(Node):
             self.culc_publish_object_centers(filtered_points_dictionary, msg)
 
     def culc_publish_object_centers(self, filtered_points_dictionary, msg):
+
+            msg_frame = msg.header.frame_id
             
             object_centers = []
 
@@ -190,7 +192,7 @@ class Detection(Node):
                     try:
                         t = self.tf_buffer.lookup_transform(
                             'odom', 
-                            msg.header.frame_id,
+                            msg_frame,
                             rclpy.time.Time())
                         
                     except TransformException as ex:

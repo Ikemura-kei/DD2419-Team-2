@@ -13,4 +13,7 @@ def generate_launch_description():
     #this static transform was given to us
     baselink_2_realsense_tf = Node(executable='static_transform_publisher', package='tf2_ros', arguments=['--child-frame-id', 'camera_link', '--frame-id', 'base_link', '--x', '0.08987', '--y', '0.0175', '--z', '0.10456'])
     
-    return LaunchDescription([realsense_launch, baselink_2_realsense_tf])
+    #may want to adjust this since don't know what y value is
+    baselink_2_depth_tf = Node(executable='static_transform_publisher', package='tf2_ros', arguments=['--child-frame-id', 'camera_depth_optical_frame', '--frame-id', 'base_link', '--x', '0.08987', '--y', '0.0175', '--z', '0.10456'])
+    
+    return LaunchDescription([realsense_launch, baselink_2_realsense_tf, baselink_2_depth_tf])
