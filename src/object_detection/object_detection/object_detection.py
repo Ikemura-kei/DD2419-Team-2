@@ -221,7 +221,7 @@ class Detection(Node):
                             return
                     
                     marker.pose.position.x = t.transform.translation.x + center_z + 0.08987
-                    marker.pose.position.y = t.transform.translation.y - center_x + 0.0175
+                    marker.pose.position.y = t.transform.translation.y - center_x + 0.0175 + 0.015 # adding the second term because the depth is different than color frame
                     marker.pose.position.z = t.transform.translation.z - center_y + 0.10456
                     marker.lifetime = Duration(sec=1, nanosec=0)
                     marker.scale.x = 0.01  # Adjust the scale as needed

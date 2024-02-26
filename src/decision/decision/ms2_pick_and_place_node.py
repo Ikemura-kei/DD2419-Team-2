@@ -10,10 +10,12 @@ class FSMStates:
     INIT = 0
     WAITING = 1
     GOING_TO_OBJ = 2
-    FINISH_TIMEOUT = 3
+    REACHED_TIMEOUT = 3
     PICK = 4
     PICK_RES = 5
-    ARUCO = 6
+    WAIT_FOR_BOX_DET = 6
+    GOING_TO_BOX = 7
+    PLACE_IN_PROC = 8
     
     def __init__():
         pass
@@ -22,7 +24,9 @@ class FSMStates:
 Notes:
  - /plan_goal topic can be changed to a server or action server
     - it is already in odom frame
- - 
+ - aruco sub has frame camera_color_optical_frame
+ 
+ CURRENT IMPLEMENTATION TAKES THE DETECTIONS WHEN ROBOT IS FIXED (I.E. ODOM AND BASE_LINK ARE TOGETHER)
 """
     
 class MS2PickAndPlaceNode(Node):
@@ -35,8 +39,9 @@ class MS2PickAndPlaceNode(Node):
         self.last_obj_det_time = self.get_clock().now()
         self.finish_time = self.get_clock().now()
         self.MIN_OBJ_DET_CNT = 2
+        self.MIN_DET_CNT = 2
         self.MAX_MISS_DUR = 20 # seconds
-        self.FINISH_TIMEOUT = 3.0 # seconds
+        self.REACHED_TIMEOUT = 3.0 # seconds
         self.MIN_OBJ_DISTANCE = 0.3 # m
         self.goal_reached = False
         self.obj_position = PointStamped()
@@ -59,8 +64,42 @@ class MS2PickAndPlaceNode(Node):
         self.ik_success = False
         self.msg_received = False
         
-        self.update = True # this is to only update the detection during waitings
+        self.update_obj = True # this is to only update the detection during waitings
         
+        self.aruco_sub = self.create_subscription(MarkerArray, '/aruco/markers', self.aruco_cb, 10)
+        
+        self.update_aruco = True
+        self.box_det_cnt = 0
+        
+        self.drop_pub = self.create_publisher(Bool, '/drop_obj', 10)
+        self.drop_obj_sub = self.create_subscription(Bool, '/drop_obj_res', self.drop_obj_cb, 10)
+        self.drop_success = False
+        self.drop_msg_received = False  
+    
+    
+    def drop_obj_cb(self, msg: Bool):
+        self.drop_success = msg.data
+        self.drop_msg_received = True       
+    
+    # this needs to change!!!!!!!!! It is being put in the odom frame manually. Should be using transform!
+    def aruco_cb(self, msg:MarkerArray):
+        
+        print("HEeeeeeeeeeeeeerrrrrrreeeeeeeeeeeee HEeeeeeeeeeeeeerrrrrrreeeeeeeeeeeee HEeeeeeeeeeeeeerrrrrrreeeeeeeeeeeee")
+        if not self.update_aruco:
+            return
+        
+        for aruco in msg.markers:
+            # if aruco.id != 1:
+            #     continue
+            
+            self.box_det_cnt += 1
+            self.target_x = aruco.pose.pose.position.z
+            self.target_y = -aruco.pose.pose.position.x
+            break
+    
+    def ik_res_cb(self, msg:Bool):
+        self.ik_success = msg.data
+        self.msg_received = True
     
     def ik_res_cb(self, msg:Bool):
         self.ik_success = msg.data
@@ -82,7 +121,7 @@ class MS2PickAndPlaceNode(Node):
         
     def obj_cb(self, msg:MarkerArray):
         
-        if not self.update:
+        if not self.update_obj:
             return
         # print("==> Received number of markers {}".format(len(msg.markers)))
         for marker in msg.markers:
@@ -119,14 +158,18 @@ class MS2PickAndPlaceNode(Node):
         
         if self.state == FSMStates.INIT:
             self.state = FSMStates.WAITING
+            self.box_det_cnt = 0
             self.obj_det_cnt = 0
-            self.update = True
+            self.update_obj = True
+            self.update_aruco = True
             
         elif self.state == FSMStates.WAITING:
-            self.update = True
+            self.update_obj = True
+            self.update_aruco = True
             if self.obj_det_cnt >= self.MIN_OBJ_DET_CNT:
                 self.state = FSMStates.GOING_TO_OBJ
-                self.update = False
+                self.update_obj = False
+                self.update_aruco = False # do this because when robot moves then aruco detections are incorrect!
                 self.goal_pub.publish(self.obj_position)
                 
         elif self.state == FSMStates.GOING_TO_OBJ:
@@ -134,18 +177,19 @@ class MS2PickAndPlaceNode(Node):
             # self.goal_reached = distance_to_obj < self.MIN_OBJ_DISTANCE # if the distance of the detected object is smaller than a threshold, we confirm reached
             # print("==> Distance to object {}".format(distance_to_obj))
             if self.goal_reached:
-                self.state = FSMStates.FINISH_TIMEOUT
+                self.state = FSMStates.REACHED_TIMEOUT
+                self.goal_reached = False
                 # -- stop --
-                self.finish_time = self.get_clock().now()
-            elif ((self.get_clock().now() - self.last_obj_det_time).nanoseconds / 1e9) > self.MAX_MISS_DUR:
-                self.state = FSMStates.WAITING
-                self.obj_det_cnt = 0
-            elif ((self.get_clock().now() - self.last_obj_det_time).nanoseconds / 1e9) < self.MAX_SEND_GOAL_TIMEOUT: # may want to see object a few times before publishing again. Check this
-                pass
+                # self.finish_time = self.get_clock().now()
+            # elif ((self.get_clock().now() - self.last_obj_det_time).nanoseconds / 1e9) > self.MAX_MISS_DUR:
+            #     self.state = FSMStates.WAITING
+            #     self.obj_det_cnt = 0
+            # elif ((self.get_clock().now() - self.last_obj_det_time).nanoseconds / 1e9) < self.MAX_SEND_GOAL_TIMEOUT: # may want to see object a few times before publishing again. Check this
+            #     pass
                 # self.goal_pub.publish(self.obj_position)
         
-        elif self.state == FSMStates.FINISH_TIMEOUT:
-            if ((self.get_clock().now() - self.finish_time).nanoseconds / 1e9) > self.FINISH_TIMEOUT:
+        elif self.state == FSMStates.REACHED_TIMEOUT:
+            if ((self.get_clock().now() - self.finish_time).nanoseconds / 1e9) > self.REACHED_TIMEOUT:
                 self.state = FSMStates.PICK
                 # pass
                 
@@ -158,12 +202,39 @@ class MS2PickAndPlaceNode(Node):
             if self.msg_received:
                 self.msg_received = False
                 if self.ik_success:
-                    self.state = FSMStates.ARUCO
+                    self.state = FSMStates.WAIT_FOR_BOX_DET
                 else:
                     self.state = FSMStates.WAITING
+            
+        elif self.state == FSMStates.WAIT_FOR_BOX_DET:
+            # if self.box_det_cnt <= self.MIN_DET_CNT:
+            #     pass
+            # else:
+            # -- valid box detected --
+            self.state = FSMStates.GOING_TO_BOX
+            goal = PointStamped()
+            goal.point.x = self.target_x
+            goal.point.y = self.target_y
+            goal.header.frame_id = 'odom'
+            goal.header.stamp = self.get_clock().now().to_msg()
+            # print("goal {}".format(goal))
+            self.goal_pub.publish(goal)
         
-        elif self.state == FSMStates.ARUCO:
-            print("ARUCO STATE")
+        elif self.state == FSMStates.GOING_TO_BOX:
+            if self.goal_reached:
+                self.state = FSMStates.PLACE_IN_PROC
+                self.goal_reached = False
+                drop = Bool()
+                drop.data = True
+                self.drop_pub.publish(drop)
+        
+        elif self.state == FSMStates.PLACE_IN_PROC:
+            if self.drop_msg_received:
+                self.drop_msg_received = False
+                if self.drop_success:
+                    pass
+                else:
+                    pass
             
             
 def main():

@@ -24,13 +24,16 @@ ANGLE_LIMITS_HIGH = [12050, 21500, 20500, 23000, 16000, 16500]
 STRAIGHT = [1000, 12000, 12000, 12000, 12000, 12000]
 
 PICK_READY = [1000, 12000, 5000, 19000, 10000, 12000]
-MOVE_W_OBJ = [11050, 12000, 5000, 19000, 10000, 12000]
+MOVE_W_OBJ = [11050, 12000, 12000, 17000, 10000, 12000]
+
+# ANGLE_PLACE_DOWN = [11050, 12000, 12000, 17000, 10000, 12000]
+ANGLE_OPEN_GRIPPER = [4200, 12000, 12000, 17000, 10000, 12000]
 
 
 ANGLE_HOMES = [12000, 12000, 12000, 12000, 12000] #keeping all but the ee
 PERIOD = 0.1
 
-DELAY = 5000 #ms
+DELAY = 3500 #ms
 
 ENCODER_2_DEG = 0.01 * (np.pi/180)
 DEG_2_ENCODER = 100 * (180/np.pi)
@@ -119,13 +122,39 @@ class InverseKinematics(Node):
         self.pick_sub = self.create_subscription(PointStamped, '/pick_ik', self.obj_cb, 10)
         self.ik_res = self.create_publisher(Bool, '/ik_res', 10)
         
+        
+        self.drop_pub = self.create_publisher(Bool, '/drop_obj', 10)
+        self.drop_obj_sub = self.create_subscription(Bool, '/drop_obj_res', self.drop_obj_cb, 10)
+        
+        self.drop_sub = self.create_subscription(Bool, '/drop_obj', self.drop_obj_cb, 10)
+        self.drop_res_pub = self.create_publisher(Bool, '/drop_obj_res', 10)
+        
         self.init_joints()
         
         self.timer = self.create_timer(0.1, self.publish_joints)    
         
+    
+    def drop_obj_cb(self, msg:Bool):
+        
+        if msg.data:
+            self.drop_object()
+    
+    
     def obj_cb(self, msg:PointStamped):
         self.test_this(msg)
         
+    
+    def drop_object(self):
+        
+        print("Dropping object!")
+        self.move_arm(ANGLE_OPEN_GRIPPER)
+        time_delay = self.get_clock().now()
+        while ((self.get_clock().now() - time_delay).nanoseconds / 1e6 <= (DELAY + 1000)):
+            continue
+        
+        drop = Bool()
+        drop.data = True
+        self.drop_res_pub.publish(drop)
     
     def ik_cb_as(self, goal_handle):
         self.get_logger().info('Executing goal...') # it is in executing state.. for now, go to succeeded but response may still be fail.
@@ -299,6 +328,17 @@ class InverseKinematics(Node):
             while ((self.get_clock().now() - time_delay).nanoseconds / 1e6 <= (DELAY + 1000)):
                 continue
             
+            
+            # added this because there was a time delay and current_qs was not getting updated in time (because of callback using for current_qs)
+            q1 = (PICK_READY[5] - self.zero) * ENCODER_2_DEG
+            q2 = ((PICK_READY[4] - self.zero) * ENCODER_2_DEG) + (np.pi/2) # adding this because it starts 90 degrees positive
+            q3 = ((PICK_READY[3] - self.zero) * ENCODER_2_DEG)
+            q4 = ((PICK_READY[2] - self.zero) * ENCODER_2_DEG) + (np.pi/2) # adding this because it starts 90 degrees positive
+            q5 = ((PICK_READY[1] - self.zero) * ENCODER_2_DEG)
+            
+            self.current_qs = [q1, q2, q3, q4, q5]
+            
+            
             print("Done moving arm, now onto ik!")
             
             # this just takes the rotation matrix of the pose and keeps it. This will change when we know PoseStamped. Currently have PointStamped
@@ -310,8 +350,8 @@ class InverseKinematics(Node):
                                     [0.0, 0.0, -1.0, 0.0],
                                     [0.0, 0.0, 0.0, 1.0]])
             
-            trans_obj_r[0,3] = trans_obj.point.x + 0.055
-            trans_obj_r[1,3] = trans_obj.point.y - 0.025
+            trans_obj_r[0,3] = trans_obj.point.x + 0.045
+            trans_obj_r[1,3] = trans_obj.point.y # I thought this was not needed
             trans_obj_r[2,3] = trans_obj.point.z
 
             
@@ -405,84 +445,6 @@ class InverseKinematics(Node):
             self.move_arm(PICK_READY)
             print("Init pickup")
         
-        # if self.joy_cmd.buttons[3]: # if Y is pressed. Start IK
-            
-        #     self.update = False
-        #     self.test_this()
-            
-
-            
-        #     # desired_pose = np.array([[5.11022852e-01,  2.71393271e-02,  8.59138581e-01,  3.03887530e-01], #straight out, but down a lot.
-        #     #                          [ 5.30331184e-02, -9.98592754e-01, -2.07850033e-16, -4.49749144e-17],
-        #     #                          [8.57929562e-01,  4.55627981e-02, -5.11743000e-01, -5.34450878e-03],
-        #     #                          [0,          0,          0,          1 ]]).reshape((4,4))
-            
-            
-        #     desired_pose = np.array([[0.25822102,  0.22619024,  0.93923366,  0.3046841], #down a lot, and to the right.
-        #                              [ 0.11033404, -0.97274864,  0.20392762,  0.0661534],
-        #                              [0.95976471,  0.05097104, -0.27614063,  0.07434399],
-        #                              [0,          0,          0,          1 ]]).reshape((4,4))
-            
-            
-            
-        #     desired_pose = np.array([[9.45630384e-01,  3.04698070e-01,  1.13764065e-01,  1.97579641e-01], #down to pickup an object
-        #                             [ 3.02516728e-01, -9.52448994e-01,  3.63942753e-02,  6.32077263e-02],
-        #                             [1.19443734e-01,  3.57408181e-16, -9.92840971e-01, -8.67390514e-02],
-        #                             [0,          0,          0,          1 ]]).reshape((4,4))
-            
-            
-            
-        #     desired_pose = np.array([[0.90094339,  0.27990731,  0.33159146,  0.20733415], #down to pickup an object to the left
-        #                             [ 0.3201068,  -0.94461409, -0.07235926, -0.04524406],
-        #                             [0.29297208,  0.17133628, -0.94064406, -0.07432066],
-        #                             [0,          0,          0,          1 ]]).reshape((4,4))
-            
-            
-            
-        #     # desired_pose = np.array([[8.37858517e-01, -4.03545296e-01,  3.67619776e-01,  2.31521143e-01], #down and far left (when looking at robot) on one side to pick object
-        #     #                         [ -3.69539637e-01, -9.14959668e-01, -1.62139640e-01, -1.02112991e-01],
-        #     #                         [4.01787957e-01,  3.49760316e-16, -9.15732733e-01, -9.33479706e-02],
-        #     #                         [0,          0,          0,          1 ]]).reshape((4,4))
-            
-            
-        #     desired_pose = np.array([[0.83803405,  0.49903877,  0.22058841,  0.17665445], #far on the right (when looking at robot) and close to body
-        #                             [ 0.47165006, -0.86583697,  0.16695078,  0.13369967],
-        #                             [0.27430852, -0.0358699,  -0.96097252, -0.09478877],
-        #                             [0,          0,          0,          1 ]]).reshape((4,4))
-            
-            
-            
-        #     r_des = desired_pose[0:3, 0:3]
-        #     position_des = [desired_pose[0,3],desired_pose[1,3], desired_pose[2,3]]
-            
-        #     print(r_des)
-        #     print(position_des)
-            
-        #     print("Solving now...")
-            
-        #     res , des_qs = self.solve_ik(position_des, r_des, self.current_qs)
-        
-        #     if not res:
-        #         print("IK did not converge in time!")
-        #         return
-            
-        #     des_qs = [round(elem,2) for elem in des_qs]
-            
-        #     print([elem* (180/np.pi) for elem in des_qs])
-            
-        #     self.desired_encoder_vals = self.angle_to_encoder(des_qs)
-            
-        #     print(self.desired_encoder_vals)
-            
-        #     print("Feasible: {}".format(self.sol_feasbile()))
-            
-        
-        # if self.joy_cmd.buttons[0]: # if A is pressed. Move arm to position!
-            
-        #     if self.sol_feasbile():
-        #         self.kinematic_go()
-        #     else:
-        #         print("It ain't feasible so I ain't goin!")
     
     def init_joints(self):
         
@@ -751,7 +713,7 @@ class InverseKinematics(Node):
 
         error = 0.5*(np.cross(n1, n2) + np.cross(o1, o2) + np.cross(a1, a2)) # ALESSANDRO ADDED THIS
 
-        print(error.shape)
+        # print(error.shape)
 
         return np.reshape(error, (3,1))
 
@@ -782,7 +744,7 @@ class InverseKinematics(Node):
 
 
         max_error = 1
-        tolerance = 0.0005
+        tolerance = 0.005
         
         delay_time = self.get_clock().now()
         

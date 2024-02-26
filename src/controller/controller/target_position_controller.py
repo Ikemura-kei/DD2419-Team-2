@@ -84,6 +84,7 @@ class TargetPositionController(Node):
         
         # print("orig x: {}, orig y: {}".format(msg.x, msg.y))
         # print("x: {}, y: {}".format(self.target_x, self.target_y))
+        self.target_frame_id = msg.header.frame_id
         self.target_stamp = msg.header.stamp
         self.target_x = msg.point.x
         self.target_y = msg.point.y
@@ -107,6 +108,7 @@ class TargetPositionController(Node):
         else:
             self.stop = False
     
+    # THIS ASSUMES THE TARGET IS ALWAYS IN THE ODOM FRAME
     def publish_twist(self):
         if self.target_x is None or self.target_y is None:
             return
