@@ -20,10 +20,9 @@ class PathPlanner(Node):
     target_y = None
     origin_x = 0.0
     origin_y = 0.0
-    map = None
-    resolution = None
+    map = OccupancyGrid()
     def __init__(self):
-        super().__init__('target_position_controller')
+        super().__init__('path_planner')
         self.get_logger().info('Welcome to path planner')
 
         # Initialize the transform listener and assign it a buffer
@@ -38,7 +37,6 @@ class PathPlanner(Node):
 
         self._point_pub = self.create_publisher(
             PointStamped, '/clicked_point', 10)
-        self.publish_point()
 
         self._poses_pub = self.create_publisher(
             PoseArray, '/planned_poses', 10)
@@ -75,38 +73,42 @@ class PathPlanner(Node):
         target_pose = do_transform_pose_stamped(target_pose, transform_base2odom)
         self.goal_t = stamp
         self.target_x = target_pose.pose.position.x
-        self.target_y = target_pose.pose.position.y  
+        self.target_y = target_pose.pose.position.y
+        self.publish_point()
         self.get_logger().info('Received goal: x: %f, y: %f' % (self.target_x, self.target_y))
         
     def map_cb(self, msg):
-        if self.map is not None:
+        if len(self.map.data) > 0:
             return
-        self.resolution = msg.info.resolution
-
-        size = math.pow(len(msg.data),0.5).__int__()
-        map = [[0 for x in range(size)] for y in range(size)]
-        for i in range(size):
-            for j in range(size):
-                map[i][j] = msg.data[i * size + j]
-        self.map = map
+        self.map = msg
+        
 
     def dijkstra(self):
-        if self.map is None or self.target_x is None or self.target_y is None or self.origin_x is None or self.origin_y is None:
+        if len(self.map.data) == 0 or self.target_x is None or self.target_y is None or self.origin_x is None or self.origin_y is None:
             return None
         
         self.get_logger().info("Dijkstra")
 
         map_origin_x, map_origin_y = self.from_world_to_map(self.origin_x, self.origin_y)
         map_target_x, map_target_y = self.from_world_to_map(self.target_x, self.target_y)
+        
+        self.get_logger().info("Map origin: x: %d, y: %d" % (self.map.info.origin.position.x, self.map.info.origin.position.y))
+                
+        matrix_map = [[0 for x in range(self.map.info.height)] for y in range(self.map.info.width)]
+        for j in range(self.map.info.height):
+            for i in range(self.map.info.width):
+                matrix_map[i][j] = self.map.data[i + self.map.info.width * j]
+        
+        self.get_logger().info("Map origin: x: %d, y: %d" % (map_origin_x, map_origin_y))
 
         queue = []
         visited = []
         distance = []
         links = []
-        for i in range(len(self.map)):
-            distance.append([math.inf for x in range(len(self.map[0]))])
-            visited.append([False for x in range(len(self.map[0]))])
-            links.append([None for x in range(len(self.map[0]))])
+        for i in range(len(matrix_map)):
+            distance.append([math.inf for x in range(len(matrix_map[0]))])
+            visited.append([False for x in range(len(matrix_map[0]))])
+            links.append([None for x in range(len(matrix_map[0]))])
         distance[map_origin_x][map_origin_y] = 0
         queue.append([map_origin_x, map_origin_y])
         while len(queue) > 0:
@@ -118,9 +120,9 @@ class PathPlanner(Node):
                 for j in range(-1, 2):
                     if i == 0 and j == 0:
                         continue
-                    if x + i < 0 or x + i >= len(self.map[0]) or y + j < 0 or y + j >= len(self.map):
+                    if x + i < 0 or x + i >= len(matrix_map[0]) or y + j < 0 or y + j >= len(matrix_map):
                         continue
-                    if visited[x + i][y + j] or self.map[x + i][y + j] == 100:
+                    if visited[x + i][y + j] or matrix_map[x + i][y + j] == 100:
                         continue
                     if (i == j or i == -j):
                         if distance[x + i][y + j] > distance[x][y] + math.pow(2,0.5):
@@ -173,6 +175,8 @@ class PathPlanner(Node):
         pose.pose.position.x = world_x
         pose.pose.position.y = world_y
         pose.pose.position.z = 0.01  # 1 cm up so it will be above ground level
+        
+        self.get_logger().info("Publishing path: world_x: %f, world_y: %f, %f, %f" % (world_x, world_y, x, y))
 
         q = quaternion_from_euler(0.0, 0.0, yaw)
         pose.pose.orientation.x = q[0]
@@ -198,8 +202,8 @@ class PathPlanner(Node):
 
         map_x, map_y = x, y
 
-        y = (map_x - len(self.map[0])/2) * self.resolution
-        x = (map_y - len(self.map)/2) * self.resolution
+        y = map_x * self.map.info.resolution + self.map.info.origin.position.x + self.map.info.resolution / 2
+        x = map_y * self.map.info.resolution + self.map.info.origin.position.y + self.map.info.resolution / 2
 
         return x, y
 
@@ -215,10 +219,10 @@ class PathPlanner(Node):
         y -- y coordinate in the map
         """
 
-        world_x, world_y = x, y
+        world_x, world_y = x-self.map.info.origin.position.x, y-self.map.info.origin.position.y
 
-        y = int((world_x / self.resolution) + len(self.map[0])/2)
-        x = int((world_y / self.resolution) + len(self.map)/2)
+        y = int(world_x / self.map.info.resolution)
+        x = int(world_y / self.map.info.resolution)
 
         return x, y  
 

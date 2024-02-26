@@ -114,6 +114,11 @@ class NaiveMappingNode(Node):
         # self.candidate_map.data = self.raw_candidate_map.reshape((-1)).tolist()
         # self.candidate_map_pub.publish(self.candidate_map)
         self.map.data = self.raw_map.reshape((-1)).tolist()
+        
+        # -- if the map's data is only zeros, then don't publish (just for MS2)--
+        if np.sum(self.raw_map) == 0:
+            return
+                
         self.map_pub.publish(self.map)
         
     
