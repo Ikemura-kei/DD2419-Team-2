@@ -23,6 +23,7 @@ class MS1GoToDetectedObjNodeV2(Node):
         super().__init__('go_to_detected_obj_node')
         
         self.state = FSMStates.INIT
+        self.joy_state = False
         
         self.last_obj_det_time = self.get_clock().now()
         self.finish_time = self.get_clock().now()
@@ -43,7 +44,7 @@ class MS1GoToDetectedObjNodeV2(Node):
         self.target_position_pub = self.create_publisher(Point, '/target_position', 10)
         
         self.map_sub = self.create_subscription(OccupancyGrid, '/global_map', self.map_cb, 10)
-
+        self.joy_sub = self.create_subscription(Joy, '/joy', self.joy_cb, 10)
         self.object_sub = self.create_subscription(PoseArray, '/planned_poses', self.poses_cb, 10)
 
         self.completion_sub = self.create_subscription(
@@ -51,6 +52,14 @@ class MS1GoToDetectedObjNodeV2(Node):
             'task_completion',
             self.completion_callback,
             10)
+    
+    def joy_cb(self, msg:Joy):
+        print("==> Joy callback")
+        if msg.buttons[1]:
+            self.joy_state = False 
+        elif msg.buttons[0]:  
+            self.joy_state = True 
+            
     
     def completion_callback(self, msg: String):
         self.get_logger().info('==> Task completed')
@@ -71,15 +80,16 @@ class MS1GoToDetectedObjNodeV2(Node):
 
     def loop(self):
         print("==> State: {}".format(self.state))
+        print("==> Joy state {}".format(self.joy_state))
         
         if self.state == FSMStates.INIT:
             self.state = FSMStates.WAITING
             
         elif self.state == FSMStates.WAITING:
-            if len(self.map.data) > 0:
+            if len(self.map.data) > 0 and self.joy_state:
                 self.state = FSMStates.COMPUTING_PATH
-                self.obj_position.x = 4.3
-                self.obj_position.y = 1.5
+                self.obj_position.x = 2.0
+                self.obj_position.y = 0.0
                 self.get_logger().info('==> Sending goal')
                 for data in self.map.data:
                     print(data)
@@ -112,7 +122,8 @@ class MS1GoToDetectedObjNodeV2(Node):
         elif self.state == FSMStates.FINISH_TIMEOUT:
             if ((self.get_clock().now() - self.finish_time).nanoseconds / 1e9) > self.FINISH_TIMEOUT:
                 self.get_logger().info('==> Timeout finished, should restart a new loop setting state to FSMStates.WAITING')
-                #self.state = FSMStates.WAITING
+                self.state = FSMStates.WAITING
+                self.joy_state = False
                 # pass
                 
             

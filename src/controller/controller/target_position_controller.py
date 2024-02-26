@@ -18,10 +18,10 @@ class TargetPositionController(Node):
     target_x = None
     target_y = None
     
-    linear_vel = 0.2
+    linear_vel = 0.6
     alpha = 3.25
     # Define a threshold for stopping distance
-    stopping_distance_threshold = 0.23
+    stopping_distance_threshold = 0.1
     angular_threshold = 0.05
     angle_threshold = 0.1
 
@@ -35,7 +35,7 @@ class TargetPositionController(Node):
         self.listener = TransformListener(self.tf2Buffer, self)
 
         self._twist_publisher = self.create_publisher(
-            Twist, '/simulation/cmd_vel', 10)
+            Twist, '/motor_controller/twist', 10)
         
         self._completion_publisher = self.create_publisher(String, 'task_completion', 10)
                 
@@ -43,7 +43,6 @@ class TargetPositionController(Node):
 
         # Timer to publish commands every 100 milliseconds (10 Hz)
         self.timer = self.create_timer(0.1, self.publish_twist)
-        self.timer = self.create_timer(0.1, self.publish_point)
 
     def publish_completion(self):
         msg = String()
@@ -97,7 +96,7 @@ class TargetPositionController(Node):
         distance_x = self.target_x-robot_x
         distance_y = self.target_y-robot_y
         
-        target_orientation = math.atan2(distance_y, distance_x)-robot_orientation
+        target_orientation = robot_orientation-math.atan2(distance_y, distance_x)
         
         distance_to_target = math.sqrt(distance_x**2 + distance_y**2)
         
@@ -125,6 +124,7 @@ class TargetPositionController(Node):
              twist_msg.angular.z = 0.0
              
         # TO TEST: Publish the DutyCycles message
+        self.get_logger().info('Publishing twist message: linear: %f, angular: %f' % (twist_msg.linear.x, twist_msg.angular.z))
         self._twist_publisher.publish(twist_msg)
 
 def main():

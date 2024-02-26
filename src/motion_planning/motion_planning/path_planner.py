@@ -15,7 +15,15 @@ from rclpy.node import Node
 import math
 import numpy as np
 
+class GRID_STATES:
+    EMPTY = 0
+    OCCUPIED = 100
+    
+    def __init__():
+        pass
+
 class PathPlanner(Node):
+    threshold_distance = 3 # to improve later (robot's radius)
     target_x = None
     target_y = None
     origin_x = 0.0
@@ -91,16 +99,33 @@ class PathPlanner(Node):
 
         map_origin_x, map_origin_y = self.from_world_to_map(self.origin_x, self.origin_y)
         map_target_x, map_target_y = self.from_world_to_map(self.target_x, self.target_y)
+                        
+        matrix_map = np.array(self.map.data).reshape((self.map.info.height, self.map.info.width))
         
-        self.get_logger().info("Map origin: x: %d, y: %d" % (self.map.info.origin.position.x, self.map.info.origin.position.y))
-                
-        matrix_map = [[0 for x in range(self.map.info.height)] for y in range(self.map.info.width)]
-        for j in range(self.map.info.height):
-            for i in range(self.map.info.width):
-                matrix_map[i][j] = self.map.data[i + self.map.info.width * j]
+        # Create an empty buffer grid
+        obstacle_buffer = np.zeros_like(matrix_map)
+        threshold_nb_cells = self.threshold_distance
         
-        self.get_logger().info("Map origin: x: %d, y: %d" % (map_origin_x, map_origin_y))
+        # Iterate over each cell in the occupancy grid
+        for i in range(matrix_map.shape[0]):
+            for j in range(matrix_map.shape[1]):
+                # Check if the current cell is an obstacle
+                if matrix_map[i, j] == GRID_STATES.OCCUPIED:
+                    # Iterate over neighboring cells within the threshold distance
+                    for di in range(-threshold_nb_cells, threshold_nb_cells + 1):
+                        for dj in range(-threshold_nb_cells, threshold_nb_cells + 1):
+                            # Calculate the indices of the neighboring cell
+                            ni, nj = i + di, j + dj
+                            # Check if the neighboring cell is within the grid bounds
+                            if 0 <= ni < matrix_map.shape[0] and 0 <= nj < matrix_map.shape[1]:
+                                # Check if the neighboring cell is not an obstacle
+                                if matrix_map[ni, nj] == GRID_STATES.EMPTY:
+                                    # Update the buffer grid to mark the neighboring cell as part of the buffer
+                                    obstacle_buffer[ni, nj] = 1
 
+        # Update the occupancy grid: set points within the buffer to obstacles
+        matrix_map[obstacle_buffer.astype(bool)] = 100
+        
         queue = []
         visited = []
         distance = []
@@ -122,7 +147,7 @@ class PathPlanner(Node):
                         continue
                     if x + i < 0 or x + i >= len(matrix_map[0]) or y + j < 0 or y + j >= len(matrix_map):
                         continue
-                    if visited[x + i][y + j] or matrix_map[x + i][y + j] == 100:
+                    if visited[x + i][y + j] or matrix_map[x + i][y + j] == GRID_STATES.OCCUPIED:
                         continue
                     if (i == j or i == -j):
                         if distance[x + i][y + j] > distance[x][y] + math.pow(2,0.5):
@@ -202,8 +227,8 @@ class PathPlanner(Node):
 
         map_x, map_y = x, y
 
-        y = map_x * self.map.info.resolution + self.map.info.origin.position.x + self.map.info.resolution / 2
-        x = map_y * self.map.info.resolution + self.map.info.origin.position.y + self.map.info.resolution / 2
+        y = map_x * self.map.info.resolution + self.map.info.origin.position.x + self.map.info.resolution
+        x = map_y * self.map.info.resolution + self.map.info.origin.position.y + self.map.info.resolution
 
         return x, y
 
