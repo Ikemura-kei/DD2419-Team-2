@@ -1,0 +1,6 @@
+string instance_name
+string category_name
+geometry_msgs/Point object_position
+builtin_interfaces/Time latest_stamp
+uint8 nb_detections
+uint8 id
