@@ -20,11 +20,19 @@ class TargetPositionController(Node):
     target_x = None
     target_y = None
     
+<<<<<<< HEAD
     linear_vel = 1.05
     alpha = 3.25
     # Define a threshold for stopping distance
     stopping_distance_threshold = 0.23
     angular_threshold = 0.05
+=======
+    linear_vel = 0.2
+    alpha = 1.0
+    # Define a threshold for stopping distance
+    stopping_distance_threshold = 0.1
+    angular_threshold = 0.1
+>>>>>>> 01531ec (Target position controller V1)
     angle_threshold = 0.1
 
     def __init__(self):
@@ -100,9 +108,12 @@ class TargetPositionController(Node):
         robot_x = transform.transform.translation.x
         robot_y = transform.transform.translation.y
         
+<<<<<<< HEAD
         
         # print(target_pose.pose.position)
         
+=======
+>>>>>>> 01531ec (Target position controller V1)
         # Calculate the rotation angle around the z-axis
         robot_orientation = 2 * math.atan2(transform.transform.rotation.z, transform.transform.rotation.w)
     
@@ -118,7 +129,12 @@ class TargetPositionController(Node):
         distance_x = self.target_x-robot_x
         distance_y = self.target_y-robot_y
         
+<<<<<<< HEAD
         target_orientation = robot_orientation-math.atan2(distance_y, distance_x)
+=======
+        self.get_logger().info('Compute target orientation: robot rotation: %f; orientation object: %f' % ( robot_orientation, math.atan2(self.target_y, self.target_x)))
+        target_orientation = robot_orientation-math.atan2(self.target_y, self.target_x)
+>>>>>>> 01531ec (Target position controller V1)
         
         distance_to_target = math.sqrt(distance_x**2 + distance_y**2)
         
@@ -135,7 +151,10 @@ class TargetPositionController(Node):
         if distance_to_target <= self.stopping_distance_threshold:
             # Set linear velocity to zero to stop the robot
             twist_msg.linear.x = 0.0
+<<<<<<< HEAD
             self.target_x = self.target_y = None
+=======
+>>>>>>> 01531ec (Target position controller V1)
         else:
             twist_msg.linear.x = self.linear_vel
             

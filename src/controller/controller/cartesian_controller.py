@@ -58,7 +58,11 @@ class CartesianController(Node):
         msg = DutyCycles()
 
         msg.duty_cycle_left = self.motion(self.alpha_l, self.beta_l, self.gamma_l, False)
+<<<<<<< HEAD
         msg.duty_cycle_right = self.motion(self.alpha_r, self.beta_r, self.gamma_r) * self.correcting_term_r
+=======
+        msg.duty_cycle_right = self.motion(self.alpha_r, self.beta_r, self.gamma_r)*0.85
+>>>>>>> 01531ec (Target position controller V1)
         self.publisher_.publish(msg)
         #self.get_logger().info('Publishing: {} and {}'.format(msg.duty_cycle_left,msg.duty_cycle_right))
     
