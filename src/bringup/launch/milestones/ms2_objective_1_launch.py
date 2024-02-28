@@ -12,7 +12,6 @@ def generate_launch_description():
     chassis_launch = IncludeLaunchDescription(PythonLaunchDescriptionSource(os.path.join(bringup_pkg, 'launch', 'chassis_launch.py')))
     sensor_launch = IncludeLaunchDescription(PythonLaunchDescriptionSource(os.path.join(bringup_pkg, 'launch', 'sensors_launch.py')))
     map_launch = IncludeLaunchDescription(PythonLaunchDescriptionSource(os.path.join(mapping_pkg, 'launch', 'naive_mapping_launch.py')))
-
     aruco_launch = IncludeLaunchDescription(PythonLaunchDescriptionSource(os.path.join(det_pkg, 'launch', 'aruco_detector_launch.py')))
 
     tar_ctrl_node = Node(package='controller', executable='target_position_controller')

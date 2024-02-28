@@ -1,6 +1,6 @@
 from setuptools import find_packages, setup
 
-package_name = 'decision'
+package_name = 'motion_planning'
 
 setup(
     name=package_name,
@@ -14,18 +14,13 @@ setup(
     install_requires=['setuptools'],
     zip_safe=True,
     maintainer='team2',
-    maintainer_email='mael.arrive@insa-lyon.fr',
+    maintainer_email='team2@todo.todo',
     description='TODO: Package description',
     license='MIT',
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'ms1_go_to_obj_node = decision.ms1_go_to_obj_node:main',
-            'ms1_go_to_obj_node_v2 = decision.ms1_go_to_obj_node_v2:main',
-            'ms1_pick_and_place_node = decision.ms1_pick_and_place_node:main',
-            'ms2_go_to_obj_planning_node = decision.ms2_go_to_obj_planning_node:main',
-            'ms2_decision_tree_node = decision.ms2_decision_tree_node:main',
-            'ms2_go_to_obj_planning_node = decision.ms2_go_to_obj_planning_node:main',
+            'path_planner = motion_planning.path_planner:main'
         ],
     },
 )
