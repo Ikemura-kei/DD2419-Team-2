@@ -5,6 +5,7 @@ This is a package that provides the mapping functionalities.
 
 ## 2. Nodes
 For now, we only implement a naive mapping node that maps LiDAR readings directly to the map (with some basic outlier rejection).
+We're also taking into account the workspace stored at the `assets/workspace` location.
 
 #### 2.1 `naive_mapping_node`
 This node performs mapping in a most straigh-forward way, that is, map LiDAR scans to `odom` frame and put that point into the corresponding cell in the map.

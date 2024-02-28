@@ -114,10 +114,8 @@ class NaiveMappingNode(Node):
         
         # -- map workspace points to cell location --
         workspace_map_points = (workspace_map_points / self.MAP_RESOLUTION).astype(np.int32)
-        print("workspace map points: {}".format(workspace_map_points))
         mask = np.where((workspace_map_points[0] < self.MAX_X) * (workspace_map_points[1] < self.MAX_Y) * (workspace_map_points[0] >= 0) * (workspace_map_points[1] >= 0), 1, 0)
         workspace_map_points = workspace_map_points[:, mask==1]
-        print("workspace map points: {}".format(workspace_map_points))
         workspace_map_points = self.compute_borders(workspace_map_points)
         
         # -- add points to the candidate map --
