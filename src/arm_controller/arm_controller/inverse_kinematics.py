@@ -24,10 +24,10 @@ ANGLE_LIMITS_HIGH = [12050, 21500, 20500, 23000, 16000, 16500]
 STRAIGHT = [1000, 12000, 12000, 12000, 12000, 12000]
 
 PICK_READY = [1000, 12000, 5000, 19000, 10000, 12000]
-MOVE_W_OBJ = [11050, 12000, 12000, 17000, 10000, 12000]
+MOVE_W_OBJ = [11050, 12000, 12000, 17000, 12000, 12000]
 
 # ANGLE_PLACE_DOWN = [11050, 12000, 12000, 17000, 10000, 12000]
-ANGLE_OPEN_GRIPPER = [4200, 12000, 12000, 17000, 10000, 12000]
+ANGLE_OPEN_GRIPPER = [4200, 12000, 12000, 17000, 12000, 12000]
 
 
 ANGLE_HOMES = [12000, 12000, 12000, 12000, 12000] #keeping all but the ee
@@ -350,8 +350,8 @@ class InverseKinematics(Node):
                                     [0.0, 0.0, -1.0, 0.0],
                                     [0.0, 0.0, 0.0, 1.0]])
             
-            trans_obj_r[0,3] = trans_obj.point.x + 0.045
-            trans_obj_r[1,3] = trans_obj.point.y # I thought this was not needed
+            trans_obj_r[0,3] = trans_obj.point.x + 0.04
+            trans_obj_r[1,3] = trans_obj.point.y - 0.015# I thought this was not needed
             trans_obj_r[2,3] = trans_obj.point.z
 
             

@@ -2,9 +2,11 @@ import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Joy
 from geometry_msgs.msg import Point, PointStamped
-from visualization_msgs.msg import MarkerArray, Marker
+from visualization_msgs.msg import MarkerArray
+from aruco_msgs.msg import MarkerArray as ArucoMarkerArray
 import numpy as np
 from std_msgs.msg import Bool
+from rclpy.callback_groups import ReentrantCallbackGroup
 
 class FSMStates:
     INIT = 0
@@ -47,9 +49,11 @@ class MS2PickAndPlaceNode(Node):
         self.obj_position = PointStamped()
         self.MAX_SEND_GOAL_TIMEOUT = 0.45
         
+        cbg1 = ReentrantCallbackGroup()
+        
         self.goal_pub = self.create_publisher(PointStamped, '/plan_goal', 10) 
         
-        self.object_sub = self.create_subscription(MarkerArray, '/object_centers', self.obj_cb, 1) #in odom frame
+        self.object_sub = self.create_subscription(MarkerArray, '/object_centers', self.obj_cb, 10)#, callback_group=cbg1) #in odom frame
         
         self.joycon_sub = self.create_subscription(Joy, topic='/joy', callback=self.joy_cb, qos_profile=10) 
         self.commence = False
@@ -66,7 +70,7 @@ class MS2PickAndPlaceNode(Node):
         
         self.update_obj = True # this is to only update the detection during waitings
         
-        self.aruco_sub = self.create_subscription(MarkerArray, '/aruco/markers', self.aruco_cb, 10)
+        self.aruco_sub = self.create_subscription(ArucoMarkerArray, '/aruco/markers', self.aruco_cb, 10)#, callback_group=cbg1)
         
         self.update_aruco = True
         self.box_det_cnt = 0
@@ -82,9 +86,9 @@ class MS2PickAndPlaceNode(Node):
         self.drop_msg_received = True       
     
     # this needs to change!!!!!!!!! It is being put in the odom frame manually. Should be using transform!
-    def aruco_cb(self, msg:MarkerArray):
+    def aruco_cb(self, msg:ArucoMarkerArray):
         
-        print("HEeeeeeeeeeeeeerrrrrrreeeeeeeeeeeee HEeeeeeeeeeeeeerrrrrrreeeeeeeeeeeee HEeeeeeeeeeeeeerrrrrrreeeeeeeeeeeee")
+        print("In aruco cb!")
         if not self.update_aruco:
             return
         
@@ -95,6 +99,7 @@ class MS2PickAndPlaceNode(Node):
             self.box_det_cnt += 1
             self.target_x = aruco.pose.pose.position.z
             self.target_y = -aruco.pose.pose.position.x
+            print(self.target_x, self.target_y)
             break
     
     def ik_res_cb(self, msg:Bool):
@@ -121,6 +126,7 @@ class MS2PickAndPlaceNode(Node):
         
     def obj_cb(self, msg:MarkerArray):
         
+        print("In OBJECT cb!")
         if not self.update_obj:
             return
         # print("==> Received number of markers {}".format(len(msg.markers)))
@@ -150,10 +156,10 @@ class MS2PickAndPlaceNode(Node):
         
         
     def loop(self):
-        print("==> State: {}".format(self.state))
+        # print("==> State: {}".format(self.state))
         
         if not (self.commence):
-            print("NOOOOOOOOOOO LOOOOOOOOOOOOOOOOOOOOOOOOPPPPPPPPPPPPPPPPP")
+            # print("NOOOOOOOOOOO LOOOOOOOOOOOOOOOOOOOOOOOOPPPPPPPPPPPPPPPPP")
             return 
         
         if self.state == FSMStates.INIT:
@@ -169,7 +175,7 @@ class MS2PickAndPlaceNode(Node):
             if self.obj_det_cnt >= self.MIN_OBJ_DET_CNT:
                 self.state = FSMStates.GOING_TO_OBJ
                 self.update_obj = False
-                self.update_aruco = False # do this because when robot moves then aruco detections are incorrect!
+                # self.update_aruco = False # do this because when robot moves then aruco detections are incorrect!
                 self.goal_pub.publish(self.obj_position)
                 
         elif self.state == FSMStates.GOING_TO_OBJ:
@@ -211,10 +217,11 @@ class MS2PickAndPlaceNode(Node):
             #     pass
             # else:
             # -- valid box detected --
+            self.update_aruco = False
             self.state = FSMStates.GOING_TO_BOX
             goal = PointStamped()
-            goal.point.x = self.target_x
-            goal.point.y = self.target_y
+            goal.point.x = self.target_x + self.obj_position.point.x - 0.06
+            goal.point.y = self.target_y + self.obj_position.point.y
             goal.header.frame_id = 'odom'
             goal.header.stamp = self.get_clock().now().to_msg()
             # print("goal {}".format(goal))
