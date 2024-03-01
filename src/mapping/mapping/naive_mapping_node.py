@@ -49,15 +49,33 @@ class NaiveMappingNode(Node):
         
         self.MAX_X = int(self.MAP_WIDTH / self.MAP_RESOLUTION)
         self.MAX_Y = int(self.MAP_HEIGHT / self.MAP_RESOLUTION)
-        self.UPDATE_TRHESH = 3
+        self.UPDATE_TRHESH = 1
         self.MIN_RANGE_FILTER_THRESH = 0.2 # m
         
+        # -- initialize the map with the borders --
+        self.init_map()
+    
+    def init_map(self):
         # Read the TSV file into a pandas DataFrame
         df = pd.read_csv(self.WORKSPACE_FILE_PATH, sep='\t')
         # Store the data into a variable named 'points'
         self.workspace_points = df[['y', 'x']].values.tolist()
         # Add the first element at the end to close the polygon
         self.workspace_points.append(self.workspace_points[0])
+        
+        workspace_map_points = np.zeros((2, len(self.workspace_points)))
+        for i in range(len(self.workspace_points)):
+            workspace_map_points[0, i] = self.workspace_points[i][0] - self.MAP_ORIGIN[0]
+            workspace_map_points[1, i] = self.workspace_points[i][1] - self.MAP_ORIGIN[1]
+            
+        # -- map workspace points to cell location --
+        workspace_map_points = (workspace_map_points / self.MAP_RESOLUTION).astype(np.int32)
+        mask = np.where((workspace_map_points[0] < self.MAX_X) * (workspace_map_points[1] < self.MAX_Y) * (workspace_map_points[0] >= 0) * (workspace_map_points[1] >= 0), 1, 0)
+        workspace_map_points = workspace_map_points[:, mask==1]
+        workspace_map_points = self.compute_borders(workspace_map_points)
+        
+        self.raw_candidate_map[workspace_map_points[1], workspace_map_points[0]] = 100
+        
         
     def scan_cb(self, msg:LaserScan):
         # -- get current position of the robot --
@@ -101,26 +119,14 @@ class NaiveMappingNode(Node):
             point = do_transform_point(points[i], transform)
             points_map[0, i] = point.point.x - self.MAP_ORIGIN[0]
             points_map[1, i] = point.point.y - self.MAP_ORIGIN[1]
-        
-        workspace_map_points = np.zeros((2, len(self.workspace_points)))
-        for i in range(len(self.workspace_points)):
-            workspace_map_points[0, i] = self.workspace_points[i][0] - self.MAP_ORIGIN[0]
-            workspace_map_points[1, i] = self.workspace_points[i][1] - self.MAP_ORIGIN[1]
             
         # -- map points to cell location --
         points_map = (points_map / self.MAP_RESOLUTION).astype(np.int32)
         mask = np.where((points_map[0] < self.MAX_X) * (points_map[1] < self.MAX_Y) * (points_map[0] >= 0) * (points_map[1] >= 0), 1, 0)
         points_map = points_map[:, mask==1]
         
-        # -- map workspace points to cell location --
-        workspace_map_points = (workspace_map_points / self.MAP_RESOLUTION).astype(np.int32)
-        mask = np.where((workspace_map_points[0] < self.MAX_X) * (workspace_map_points[1] < self.MAX_Y) * (workspace_map_points[0] >= 0) * (workspace_map_points[1] >= 0), 1, 0)
-        workspace_map_points = workspace_map_points[:, mask==1]
-        workspace_map_points = self.compute_borders(workspace_map_points)
-        
         # -- add points to the candidate map --
         self.raw_candidate_map[points_map[1], points_map[0]] += 1
-        self.raw_candidate_map[workspace_map_points[1], workspace_map_points[0]] = 100
         
         # -- post-process the candidate map --
         update_mask = np.where(self.raw_candidate_map>self.UPDATE_TRHESH, 1, 0)
