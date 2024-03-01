@@ -47,7 +47,7 @@ class NaiveMappingNode(Node):
         
         self.MAX_X = int(self.MAP_WIDTH / self.MAP_RESOLUTION)
         self.MAX_Y = int(self.MAP_HEIGHT / self.MAP_RESOLUTION)
-        self.UPDATE_TRHESH = 3
+        self.UPDATE_TRHESH = 1
         self.MIN_RANGE_FILTER_THRESH = 0.2 # m
         
     def scan_cb(self, msg:LaserScan):

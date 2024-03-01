@@ -23,7 +23,7 @@ class GRID_STATES:
         pass
 
 class PathPlanner(Node):
-    threshold_distance = 3 # to improve later (robot's radius)
+    threshold_distance = 4 # to improve later (robot's radius)
     target_x = None
     target_y = None
     origin_x = 0.0
