@@ -12,9 +12,11 @@ from rclpy.node import Node
 # -- other stuff --
 import numpy as np
 from tf2_geometry_msgs.tf2_geometry_msgs import do_transform_point
+import pandas as pd
 
 class NaiveMappingNode(Node):
     MAP_TOPIC = '/global_map'
+    WORKSPACE_FILE_PATH = 'assets/workspace.tsv'
     MAP_WIDTH = 12
     MAP_HEIGHT = 10.5
     MAP_ORIGIN = [-5, -5]
@@ -49,6 +51,31 @@ class NaiveMappingNode(Node):
         self.MAX_Y = int(self.MAP_HEIGHT / self.MAP_RESOLUTION)
         self.UPDATE_TRHESH = 1
         self.MIN_RANGE_FILTER_THRESH = 0.2 # m
+        
+        # -- initialize the map with the borders --
+        self.init_map()
+    
+    def init_map(self):
+        # Read the TSV file into a pandas DataFrame
+        df = pd.read_csv(self.WORKSPACE_FILE_PATH, sep='\t')
+        # Store the data into a variable named 'points'
+        self.workspace_points = df[['y', 'x']].values.tolist()
+        # Add the first element at the end to close the polygon
+        self.workspace_points.append(self.workspace_points[0])
+        
+        workspace_map_points = np.zeros((2, len(self.workspace_points)))
+        for i in range(len(self.workspace_points)):
+            workspace_map_points[0, i] = self.workspace_points[i][0] - self.MAP_ORIGIN[0]
+            workspace_map_points[1, i] = self.workspace_points[i][1] - self.MAP_ORIGIN[1]
+            
+        # -- map workspace points to cell location --
+        workspace_map_points = (workspace_map_points / self.MAP_RESOLUTION).astype(np.int32)
+        mask = np.where((workspace_map_points[0] < self.MAX_X) * (workspace_map_points[1] < self.MAX_Y) * (workspace_map_points[0] >= 0) * (workspace_map_points[1] >= 0), 1, 0)
+        workspace_map_points = workspace_map_points[:, mask==1]
+        workspace_map_points = self.compute_borders(workspace_map_points)
+        
+        self.raw_candidate_map[workspace_map_points[1], workspace_map_points[0]] = 100
+        
         
     def scan_cb(self, msg:LaserScan):
         # -- get current position of the robot --
@@ -120,6 +147,76 @@ class NaiveMappingNode(Node):
             return
                 
         self.map_pub.publish(self.map)
+    
+    def compute_borders(self, poly):
+        res = []
+        for i in range(len(poly[0])):
+            res.append([poly[0][i], poly[1][i]])
+            if i < len(poly[0])-1:
+                res += self.bresenham(poly[0][i], poly[1][i], poly[0][i+1], poly[1][i+1])
+        return np.array(res).T
+    
+    def bresenham(self, x0, y0, x1, y1):
+        """Bresenham's Line Algorithm
+        Produces a list of tuples from start and end
+        Source: https://www.roguebasin.com/index.php?title=Bresenham%27s_Line_Algorithm
+        Parameters
+        ----------
+        x0 : int
+            The x-coordinate of the start point.
+        y0 : int
+            The y-coordinate of the start point.
+        x1 : int
+            The x-coordinate of the end point.
+        y1 : int
+            The y-coordinate of the end point.
+        Returns
+        -------
+        list
+            The list of tuples.
+        """
+        # Setup initial conditions
+        dx = x1 - x0
+        dy = y1 - y0
+
+        # Determine how steep the line is
+        is_steep = abs(dy) > abs(dx)
+
+        # Rotate line
+        if is_steep:
+            x0, y0 = y0, x0
+            x1, y1 = y1, x1
+
+        # Swap start and end points if necessary and store swap state
+        swapped = False
+        if x0 > x1:
+            x0, x1 = x1, x0
+            y0, y1 = y1, y0
+            swapped = True
+
+        # Recalculate differentials
+        dx = x1 - x0
+        dy = y1 - y0
+
+        # Calculate error
+        error = int(dx / 2.0)
+        ystep = 1 if y0 < y1 else -1
+
+        # Iterate over bounding box generating points between start and end
+        y = y0
+        points = []
+        for x in range(x0, x1 + 1):
+            coord = (y, x) if is_steep else (x, y)
+            points.append(coord)
+            error -= abs(dy)
+            if error < 0:
+                y += ystep
+                error += dx
+
+        # Reverse the list if the coordinates were swapped
+        if swapped:
+            points.reverse()
+        return points
         
     
     def get_robot_location(self, stamp):
