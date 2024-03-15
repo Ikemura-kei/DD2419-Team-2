@@ -26,6 +26,7 @@ class PathPlanner(Node):
     threshold_distance = 4 # to improve later (robot's radius)
     target_x = None
     target_y = None
+    completed = False
     origin_x = 0.0
     origin_y = 0.0
     map = OccupancyGrid()
@@ -144,6 +145,7 @@ class PathPlanner(Node):
             [x, y] = queue.pop(0)
             visited[x][y] = True
             if x == map_target_x and y == map_target_y:
+                self.completed = True
                 break
             for i in range(-1, 2):
                 for j in range(-1, 2):
@@ -163,6 +165,12 @@ class PathPlanner(Node):
                         distance[x + i][y + j] = distance[x][y] + 1
                         links[x + i][y + j] = [x, y]
                         queue.append([x + i, y + j])
+                        
+        if not self.completed:
+            self.get_logger().info("No path found")
+            return None
+        
+        self.completed = False    
         x, y = map_target_x, map_target_y
         current_direction = [0, 0]
         while links[x][y] is not None:
