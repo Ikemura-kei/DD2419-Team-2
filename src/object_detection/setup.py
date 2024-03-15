@@ -26,7 +26,8 @@ setup(
             'object_detection = object_detection.object_detection:main',
             'display_markers = object_detection.display_markers:main',
             'dl_detection = object_detection.dl_detection:main',
-            'dl_object_classifier = object_detection.dl_object_classifier:main'
+            'dl_object_classifier = object_detection.dl_object_classifier:main',
+            'dl_postprocessor = object_detection.dl_postprocessor:main'
         ],
     },
 )
