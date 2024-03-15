@@ -99,8 +99,12 @@ class PathPlanner(Node):
 
         map_origin_x, map_origin_y = self.from_world_to_map(self.origin_x, self.origin_y)
         map_target_x, map_target_y = self.from_world_to_map(self.target_x, self.target_y)
-                        
+                                
         matrix_map = np.array(self.map.data).reshape((self.map.info.height, self.map.info.width))
+        
+        if matrix_map[map_target_x, map_target_y] == GRID_STATES.OCCUPIED:
+            self.get_logger().info("Origin is an obstacle")
+            return None
         
         # Create an empty buffer grid
         obstacle_buffer = np.zeros_like(matrix_map)
