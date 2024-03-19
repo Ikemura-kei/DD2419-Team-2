@@ -17,8 +17,7 @@ def generate_launch_description():
     joystick_launch = IncludeLaunchDescription(PythonLaunchDescriptionSource(os.path.join(teleop_twist_joy_dir, 'launch/teleop-launch.py')), launch_arguments={'joy_config': 'xbox'}.items())
 
     controller_node = Node(package='controller', executable='open_loop_controller')
-    odometry_node = Node(package='odometry', executable='odometry', output='screen')
     
-    ld = LaunchDescription([motors_launch, sensor_launch, encoders_launch, joystick_launch, controller_node, odometry_node])
+    ld = LaunchDescription([motors_launch, sensor_launch, encoders_launch, joystick_launch, controller_node])
     
     return ld

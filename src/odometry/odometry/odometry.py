@@ -145,7 +145,7 @@ class Odometry(Node):
 
         self._path.poses.append(pose)
 
-        #self._path_pub.publish(self._path)
+        self._path_pub.publish(self._path)
 
 
 def main():
