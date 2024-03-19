@@ -1,16 +1,14 @@
 #!/usr/bin/env python
-import rclpy #ROS2 client library for Python.
-
+import rclpy
 from sensor_msgs.msg import Image, CameraInfo
 from geometry_msgs.msg import Point
 from rclpy.node import Node
-import torch #imports the PyTorch library, which is used for deep learning tasks.
-from PIL import Image as pil_image #imports the Image class from the Python Imaging Library (PIL) and renames it as pil_image.
-
+import torch 
+from PIL import Image as pil_image 
 from object_detection.dl_detection import Detector
 import numpy as np
-from cv_bridge import CvBridge, CvBridgeError #These are used for converting between ROS Image messages and OpenCV images.
-import cv2 #This imports the OpenCV library, which is used for computer vision tasks.
+from cv_bridge import CvBridge, CvBridgeError 
+import cv2 
 from dl_perception_interfaces.msg import BoundingBox, BoundingBoxArray
 import time
 import os
@@ -26,12 +24,6 @@ class Object_classifier(Node):
 
     def __init__(self):
         super().__init__('object_classifier')
-       
-        # Define rate
-        # self.update_rate = 10 # [Hz] Change this to the rate you want
-        # self.update_dt = 1.0/self.update_rate # [s]
-        # self.rate = rclpy.Rate(self.update_rate) 
-        # rclpy.loginfo(torch.__version__)
         
         # Paramethers 
         if torch.cuda.is_available():
@@ -58,25 +50,12 @@ class Object_classifier(Node):
         self.camera_info = [None, None, None, None]
         
         # Subscribers 
-        # self.sub_image = rclpy.Subscriber("/camera/color/image_raw", Image, self.image_callback) 
-        # self.sub_depth= rclpy.Subscriber("/camera/aligned_depth_to_color/image_raw", Image, self.depth_image_callback)
         self.sub_camera_info = self.create_subscription(
             CameraInfo, 
             "/camera/color/camera_info", 
             self.camera_info_callback, 
-            10
-        )
-
-        # image_sub = message_filters.Subscriber("/camera/color/image_raw", Image)
-        # depth_sub = message_filters.Subscriber("/camera/aligned_depth_to_color/image_raw", Image)
-        # ts = message_filters.TimeSynchronizer([image_sub, depth_sub], 2)
-        # ts.registerCallback(self.combined_callback)
-
-        # image_sub = message_filters.Subscriber("/camera/color/image_raw", Image)
-        # depth_sub = message_filters.Subscriber("/camera/aligned_depth_to_color/image_raw", Image)
-        # self.ts = message_filters.TimeSynchronizer([image_sub, depth_sub], 10)
-        # self.ts.registerCallback(self.combined_callback)
-
+            10)
+        
         self.image_sub = self.create_subscription(
             Image,
             '/camera/color/image_raw',
@@ -100,21 +79,6 @@ class Object_classifier(Node):
             "/detection/image_with_bounding_boxes", 
             10)
 
-        
-        
-    # def combined_callback(self, image_msg, depth_msg): 
-    #     try:
-    #         t0 = time.time()
-    #         cv_image = self.bridge.imgmsg_to_cv2(image_msg, "rgb8")
-    #         depth_image = self.bridge.imgmsg_to_cv2(depth_msg, "16UC1")
-    #         np_arr = np.asarray(depth_image)
-    #         depth = np_arr
-    #         self.compute_bb(image_msg.header.stamp, image_msg.header.frame_id, depth, cv_image, t0) 
-    #         # This compute_bb method computes bounding boxes and processes the images for object detection.
-    #     except CvBridgeError as e:
-    #         print(e)
-
-    
     def image_callback(self, msg): 
         """Callback function for the topic"""
         try:
@@ -253,9 +217,6 @@ class Object_classifier(Node):
                 
                 self.bb_pub.publish(bb_list_msg)
               
-            # tinfer = time.time() - t0
-            # rclpy.loginfo(1/tinfer)
-
 
 
     def compute_point(self, bb, depth_image):
