@@ -58,7 +58,6 @@ class Object_postprocessor(Node):
 
 
         # Subscribers 
-        #self.sub_topic = rospy.Subscriber("detection/bounding_boxes", BoundingBoxArray)
         self.sub_bounding_boxes = self.create_subscription(
             BoundingBoxArray,
             "detection/bounding_boxes",
@@ -103,7 +102,6 @@ class Object_postprocessor(Node):
     def filter(self, batch, time):
 
         nb_msgs = len(batch)
-        # rospy.loginfo("objects len: %s", nb_msgs)
         if nb_msgs > 0:
             # cluster on position
             X = []
@@ -131,7 +129,6 @@ class Object_postprocessor(Node):
                     for index in a:
                         bb_cluster.append(bb_list[index])
                     
-                    #rospy.loginfo("cluster size: %s" % len(bb_cluster))
                     if len(bb_cluster) > self.threshold:
                         bbs_by_cluster.append(bb_cluster)
     
@@ -322,7 +319,6 @@ class Object_postprocessor(Node):
             instance = dictionnary[old_instance_key]
             
             dist = math.sqrt((point_map.point.x - float(instance[1]))**2 + (point_map.point.y - float(instance[2]))**2 + (point_map.point.z - float(instance[3]))**2 )
-            # rospy.loginfo("dist = %s",dist)
             if dist < threshold: 
                 found_close = 1
                 instance_key = old_instance_key
@@ -350,7 +346,6 @@ class Object_postprocessor(Node):
             cv_image = cv2.rectangle(cv_image, start_point, end_point, color, thickness)
             cv_image = cv2.putText(cv_image, instance_key, (start_point[0]-10, start_point[1]-10), cv2.FONT_HERSHEY_SIMPLEX, 1, color, thickness, cv2.LINE_AA)
             path = self.directory+"/"+instance_key+".jpg"
-            #rospy.loginfo("Saving image at %s", path)
             cv2.imwrite(path, cv_image)
         except CvBridgeError as e:
             print(e)
