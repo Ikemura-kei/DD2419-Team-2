@@ -310,7 +310,6 @@ class Object_postprocessor(Node):
                     self.publish_tf(instance_key, point_map)
 
 
-
     def found_close(self, instances, point_map, threshold, dictionnary):
         
         found_close = 0
@@ -379,7 +378,6 @@ class Object_postprocessor(Node):
         self.instances_pub.publish(instances_list_msg)
 
 
-
     def instance_to_point_map(self, instance, time):
 
         point_map = PointStamped()
@@ -400,7 +398,7 @@ class Object_postprocessor(Node):
         # Instance structure: (category_name, x, y, z) example: ("animal", 0.5, 0.5, 0.5)
         
         point_map.point = Point(x=instance[1], y=instance[2], z=instance[3])
-        print("point beform tf:", point_map)
+        print("!!!!point in camera frame :", point_map)
 
         
         try:
@@ -412,8 +410,6 @@ class Object_postprocessor(Node):
         
         return point_map
     
-
-
     def publish_tf(self, instance_key, point_map): 
         
         # Publish new tranform to object/detected/instance_key
@@ -458,7 +454,7 @@ class Object_postprocessor(Node):
         current_time = self.get_clock().now()
         integer_part = current_time.nanoseconds // int(1e9)
         fractional_part = current_time.nanoseconds % int(1e9)
-        start_time = integer_part - 2   # using msg received 2 seconds ago , change this to the time you want to use!
+        start_time = integer_part - 1   # using msg received 2 seconds ago , change this to the time you want to use!
 
         latest_msgs = []
         for msg in self.bounding_boxes_buffer:

@@ -190,25 +190,32 @@ class Object_classifier(Node):
                 
                 if bb_msg.category_name is not None and depth > 0.15 and depth < 2 and bb["width"]*bb["width"] > 100:
                     
-                    # visualize image with bb in Rviz
-                    start_point = (x_bb, y_bb)
-                    end_point = (int(x_bb+bb["width"]), int(y_bb+bb["height"]))
-                    color = (255, 0, 0)
-                    thickness = 2
-                    cv_image = cv2.rectangle(cv_image, start_point, end_point, color, thickness)
-                    cv_image = cv2.putText(cv_image, bb_msg.category_name, (start_point[0]-10, start_point[1]-10), cv2.FONT_HERSHEY_SIMPLEX, 
-                    1, color, thickness, cv2.LINE_AA)
-                    imgMsg = self.bridge.cv2_to_imgmsg(cv_image, "rgb8")
-                    print("Image with bounding_boxes published! ")
-                    self.image_bb_pub.publish(imgMsg)
-                    
-                    
                     point = Point()
                     point.x = x
                     point.y = y
                     point.z = depth
                     bb_msg.bb_center = point
                     bb_list_msg.bounding_boxes.append(bb_msg)
+                    
+                    # visualize image with bb in Rviz
+                    start_point = (x_bb, y_bb)
+                    end_point = (int(x_bb+bb["width"]), int(y_bb+bb["height"]))
+                    color = (255, 0, 0)
+                    thickness = 2
+                    cv_image = cv2.rectangle(cv_image, start_point, end_point, color, thickness)
+                    # Prepare text containing category name and bb_center info
+                    text = f'{bb_msg.category_name} ({round(point.z, 2)})'
+                    
+                    # Add text to the image
+                    cv_image = cv2.putText(cv_image, text, (start_point[0]-10, start_point[1]-30), cv2.FONT_HERSHEY_SIMPLEX, 
+                                            1, color, thickness, cv2.LINE_AA)
+
+                    imgMsg = self.bridge.cv2_to_imgmsg(cv_image, "rgb8")
+                    print("Image with bounding_boxes published! ")
+                    self.image_bb_pub.publish(imgMsg)
+                    
+                    
+                    
 
                 
             if len(bb_list_msg.bounding_boxes)>0:
@@ -225,8 +232,8 @@ class Object_classifier(Node):
         x=0
         y=0
         if self.camera_info is not None:      
-            x = depth*(int(bb["x"]+bb["width"]/2) - self.camera_info[2]) / self.camera_info[0] 
-            y = depth*(int(bb["y"]+bb["height"]/2) - self.camera_info[3]) / self.camera_info[1]
+            x = depth*(int(bb["x"]+bb["width"]/2) - self.camera_info[2]) / self.camera_info[0]    # X = Z*(x-cx)/fx    X,Y,Z are the 3D point in the camera coordinate frame
+            y = depth*(int(bb["y"]+bb["height"]/2) - self.camera_info[3]) / self.camera_info[1]   # Y = Z*(x-cy)/fy    x,y are the pixel coordinates of the 2D bbox center point in the image plane
         
         return x, y, depth
     
