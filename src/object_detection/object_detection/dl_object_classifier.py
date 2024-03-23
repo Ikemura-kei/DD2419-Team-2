@@ -64,7 +64,7 @@ class Object_classifier(Node):
         
         self.depth_sub = self.create_subscription(
             Image,
-            '/camera/depth/image_rect_raw',
+            '/camera/aligned_depth_to_color/image_raw',
             self.depth_image_callback,
             10)
         
@@ -203,12 +203,25 @@ class Object_classifier(Node):
                     color = (255, 0, 0)
                     thickness = 2
                     cv_image = cv2.rectangle(cv_image, start_point, end_point, color, thickness)
-                    # Prepare text containing category name and bb_center info
-                    text = f'{bb_msg.category_name} ({round(point.z, 2)})'
+                    # Prepare text containing category name, xyz info, and z-coordinate with each coordinate on a new line and "x=" before X-coordinate
+                    text = f'{bb_msg.category_name}'
+                    text_coordinates_x =  f'X={round(point.x, 2)}'
+                    text_coordinates_y =  f'Y={round(point.y, 2)}'
+                    text_coordinates_z =  f'Z={round(point.z, 2)}'
                     
-                    # Add text to the image
-                    cv_image = cv2.putText(cv_image, text, (start_point[0]-10, start_point[1]-30), cv2.FONT_HERSHEY_SIMPLEX, 
-                                            1, color, thickness, cv2.LINE_AA)
+
+                    # Add text to the image with reduced font size
+                    font_scale = 0.8  # Adjust font scale as needed
+                    cv_image = cv2.putText(cv_image, text, (start_point[0]-10, start_point[1]-120), cv2.FONT_HERSHEY_SIMPLEX, 
+                        font_scale, color, thickness, cv2.LINE_AA)
+                    cv_image = cv2.putText(cv_image, text_coordinates_x, (start_point[0]-10, start_point[1]-90), cv2.FONT_HERSHEY_SIMPLEX, 
+                        font_scale, color, thickness, cv2.LINE_AA)
+                    cv_image = cv2.putText(cv_image, text_coordinates_y, (start_point[0]-10, start_point[1]-60), cv2.FONT_HERSHEY_SIMPLEX,
+                        font_scale, color, thickness, cv2.LINE_AA)
+                    cv_image = cv2.putText(cv_image, text_coordinates_z, (start_point[0]-10, start_point[1]-30), cv2.FONT_HERSHEY_SIMPLEX,
+                        font_scale, color, thickness, cv2.LINE_AA)
+                    
+
 
                     imgMsg = self.bridge.cv2_to_imgmsg(cv_image, "rgb8")
                     print("Image with bounding_boxes published! ")
@@ -227,13 +240,9 @@ class Object_classifier(Node):
 
 
     def compute_point(self, bb, depth_image):
-        xindepth = 69 + (int(bb["y"]+bb["width"]/2)/680)*502 #680 is the width of the image
-        yindepth = 77 + (int(bb["x"]+bb["height"]/2)/460)*284 #460 is the height of the image
         
-        depth = depth_image[int(yindepth),int(xindepth)]/1000
-        # Mannually align pixel coordinates in depth image with pixel coordinates in color image
+        depth = depth_image[int(bb["y"]+bb["height"]/2),int(bb["x"]+bb["width"]/2)]/1000
         
-
         x=0
         y=0
         if self.camera_info is not None:      
