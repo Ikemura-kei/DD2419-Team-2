@@ -227,7 +227,12 @@ class Object_classifier(Node):
 
 
     def compute_point(self, bb, depth_image):
-        depth = depth_image[int(bb["y"]+bb["height"]/2),int(bb["x"]+bb["width"]/2)]/1000
+        xindepth = 69 + (int(bb["y"]+bb["width"]/2)/680)*502 #680 is the width of the image
+        yindepth = 77 + (int(bb["x"]+bb["height"]/2)/460)*284 #460 is the height of the image
+        
+        depth = depth_image[int(yindepth),int(xindepth)]/1000
+        # Mannually align pixel coordinates in depth image with pixel coordinates in color image
+        
 
         x=0
         y=0
