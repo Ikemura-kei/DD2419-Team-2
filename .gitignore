@@ -4,3 +4,6 @@ log/
 bags/*.zip
 bags/rosbag2*/
 *.pyc
+src/object_detection/object_detection/dl_detection_model_weights/Set1/
+src/object_detection/object_detection/dl_detection_model_weights/test_images2/
+src/object_detection/object_detection/dl_detection_model_weights/test_images_corridor/
