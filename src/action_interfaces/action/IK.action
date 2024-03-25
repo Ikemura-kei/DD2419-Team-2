@@ -1,8 +1,0 @@
-# Request
-geometry_msgs/PointStamped goal_point
----
-# Result
-int32 result
----
-# Feedback
-int32 current_num
