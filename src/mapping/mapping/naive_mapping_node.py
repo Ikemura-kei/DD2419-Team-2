@@ -63,18 +63,35 @@ class NaiveMappingNode(Node):
         # Add the first element at the end to close the polygon
         self.workspace_points.append(self.workspace_points[0])
         
-        workspace_map_points = np.zeros((2, len(self.workspace_points)))
+        workspace_map_points = np.zeros((2, len(self.workspace_points)), dtype=np.int32)
         for i in range(len(self.workspace_points)):
-            workspace_map_points[0, i] = self.workspace_points[i][0] - self.MAP_ORIGIN[0]
-            workspace_map_points[1, i] = self.workspace_points[i][1] - self.MAP_ORIGIN[1]
+            workspace_map_points[0, i], workspace_map_points[1, i] = self.from_coordinates_to_grid_index(self.workspace_points[i][0], self.workspace_points[i][1])
             
         # -- map workspace points to cell location --
-        workspace_map_points = (workspace_map_points / self.MAP_RESOLUTION).astype(np.int32)
         mask = np.where((workspace_map_points[0] < self.MAX_X) * (workspace_map_points[1] < self.MAX_Y) * (workspace_map_points[0] >= 0) * (workspace_map_points[1] >= 0), 1, 0)
         workspace_map_points = workspace_map_points[:, mask==1]
         workspace_map_points = self.compute_borders(workspace_map_points)
         
-        self.raw_candidate_map[workspace_map_points[1], workspace_map_points[0]] = 100
+        self.raw_map[workspace_map_points[1], workspace_map_points[0]] = -100
+    
+    def from_coordinates_to_grid_index(self, x, y):
+        """Transforms a pair of world coordinates to map coordinates.
+
+        Keyword arguments:
+        x -- x coordinate in the world
+        y -- y coordinate in the world
+
+        Returns:
+        x -- x coordinate in the map
+        y -- y coordinate in the map
+        """
+
+        world_x, world_y = x-self.MAP_ORIGIN[0], y-self.MAP_ORIGIN[1]
+
+        y = int(world_x / self.MAP_RESOLUTION)
+        x = int(world_y / self.MAP_RESOLUTION)
+
+        return x, y  
         
         
     def scan_cb(self, msg:LaserScan):

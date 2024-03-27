@@ -116,8 +116,12 @@ class MS3ExplorationNode(Node):
         elif self.state == FSMStates.GOING_TO_OBJ:
             if self.goal_reached:
                 # -- stop --
-                self.state = FSMStates.FINISH_TIMEOUT
+                self.state = FSMStates.WAITING
                 self.finish_time = self.get_clock().now()
+                self.joy_state = False
+                self.goal_reached = False
+                self.intermediate_goal_reached = False
+                self.get_logger().info('==> Goal reached, setting state to WAITING')
             elif self.intermediate_goal_reached:
                 self.intermediate_goal_reached = False
                 self.intermediate_goal = self.planned_poses.poses.pop().position

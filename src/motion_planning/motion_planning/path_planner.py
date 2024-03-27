@@ -17,13 +17,15 @@ import numpy as np
 
 class GRID_STATES:
     EMPTY = 0
+    BORDER = -100
     OCCUPIED = 100
     
     def __init__():
         pass
 
 class PathPlanner(Node):
-    threshold_distance = 0.16 # half of the robot's width
+    #threshold_distance = 0.16 # half of the robot's width
+    threshold_distance = 0.16
     target_x = None
     target_y = None
     completed = False
@@ -99,12 +101,16 @@ class PathPlanner(Node):
 
         map_origin_x, map_origin_y = self.from_coordinates_to_grid_index(self.origin_x, self.origin_y)
         map_target_x, map_target_y = self.from_coordinates_to_grid_index(self.target_x, self.target_y)
+        self.get_logger().info("Target: %d %d" % (map_target_x, map_target_y))
                                 
         matrix_map = np.array(self.map.data).reshape((self.map.info.height, self.map.info.width))
         
+        # Good filter but conflicts with the exploration phase
         if matrix_map[map_target_x, map_target_y] == GRID_STATES.OCCUPIED:
-            self.get_logger().info("Origin is an obstacle")
+            self.get_logger().info("Destination is an obstacle")
             return None
+        elif matrix_map[map_target_x, map_target_y] == GRID_STATES.BORDER:
+            self.get_logger().info("Destination is a border")
         
         # Create an empty buffer grid
         obstacle_buffer = np.zeros_like(matrix_map)
@@ -142,9 +148,6 @@ class PathPlanner(Node):
         distance[map_origin_x][map_origin_y] = 0
         queue.append([map_origin_x, map_origin_y])
         
-        # log dimensions of the map and the visited matrix
-        self.get_logger().info("Map dimensions: %d %d" % (len(matrix_map), len(matrix_map[0])))
-        self.get_logger().info("Visited dimensions: %d %d" % (len(visited), len(visited[0])))
         while len(queue) > 0:
             [x, y] = queue.pop(0)
             visited[x][y] = True
@@ -157,11 +160,10 @@ class PathPlanner(Node):
                         continue
                     new_x = x + i
                     new_y = y + j
-                    if new_x < 0 or new_x >= len(matrix_map[0]) or new_y < 0 or new_y >= len(matrix_map):
+                    if  new_x < 0 or new_x >= len(matrix_map) or new_y < 0 or new_y >= len(matrix_map[0]):
                         continue
-                    if visited[new_x][new_y] or matrix_map[new_x][new_y] == GRID_STATES.OCCUPIED:
+                    if (visited[new_x][new_y] or matrix_map[new_x][new_y] == GRID_STATES.OCCUPIED or (matrix_map[new_x][new_y] == GRID_STATES.BORDER and (new_x != map_target_x or new_y != map_target_y))):
                         continue
-                    self.get_logger().info("Checking %d %d" % (new_x, new_y))
                     if abs(i) == abs(j) and distance[new_x][new_y] > distance[x][y] + math.sqrt(2):
                         distance[new_x][new_y] = distance[x][y] + math.sqrt(2)
                         links[new_x][new_y] = [x, y]
