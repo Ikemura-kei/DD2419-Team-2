@@ -79,8 +79,6 @@ class Odometry(Node):
                 
         stamp = msg.header.stamp
         
-        self.get_logger().info('Odometry: x: %f, y: %f, yaw: %f, stamp sec: %f, stamp nanosec: %f' % (self._x, self._y, self._yaw, stamp.sec, stamp.nanosec))
-
         self.broadcast_transform(stamp, self._x, self._y, self._yaw)
         self.publish_path(stamp, self._x, self._y, self._yaw)
 

@@ -126,7 +126,7 @@ class NaiveMappingNode(Node):
         points_map = points_map[:, mask==1]
         
         # -- add points to the candidate map --
-        self.raw_candidate_map[points_map[1], points_map[0]] += 1
+        #self.raw_candidate_map[points_map[1], points_map[0]] += 1
         
         # -- post-process the candidate map --
         update_mask = np.where(self.raw_candidate_map>self.UPDATE_TRHESH, 1, 0)

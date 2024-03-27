@@ -23,7 +23,7 @@ class GRID_STATES:
         pass
 
 class PathPlanner(Node):
-    threshold_distance = 4 # to improve later (robot's radius)
+    threshold_distance = 0 # to improve later (robot's radius)
     target_x = None
     target_y = None
     origin_x = 0.0
@@ -31,7 +31,6 @@ class PathPlanner(Node):
     map = OccupancyGrid()
     def __init__(self):
         super().__init__('path_planner')
-        self.get_logger().info('Welcome to path planner')
 
         # Initialize the transform listener and assign it a buffer
         self.tf2Buffer = Buffer(cache_time=None)
@@ -136,29 +135,35 @@ class PathPlanner(Node):
             links.append([None for x in range(len(matrix_map[0]))])
         distance[map_origin_x][map_origin_y] = 0
         queue.append([map_origin_x, map_origin_y])
+        
+        # log dimensions of the map and the visited matrix
+        self.get_logger().info("Map dimensions: %d %d" % (len(matrix_map), len(matrix_map[0])))
+        self.get_logger().info("Visited dimensions: %d %d" % (len(visited), len(visited[0])))
         while len(queue) > 0:
             [x, y] = queue.pop(0)
             visited[x][y] = True
             if x == map_target_x and y == map_target_y:
+                self.get_logger().info("Found target")
                 break
             for i in range(-1, 2):
                 for j in range(-1, 2):
                     if i == 0 and j == 0:
                         continue
-                    if x + i < 0 or x + i >= len(matrix_map[0]) or y + j < 0 or y + j >= len(matrix_map):
+                    new_x = x + i
+                    new_y = y + j
+                    if new_x < 0 or new_x >= len(matrix_map[0]) or new_y < 0 or new_y >= len(matrix_map):
                         continue
-                    if visited[x + i][y + j] or matrix_map[x + i][y + j] == GRID_STATES.OCCUPIED:
+                    if visited[new_x][new_y] or matrix_map[new_x][new_y] == GRID_STATES.OCCUPIED:
                         continue
-                    if (i == j or i == -j):
-                        if distance[x + i][y + j] > distance[x][y] + math.pow(2,0.5):
-                            distance[x + i][y + j] = distance[x][y] + math.pow(2,0.5)
-                            links[x + i][y + j] = [x, y]
-                            queue.append([x + i, y + j])
-                        continue
-                    if distance[x + i][y + j] > distance[x][y] + 1:
-                        distance[x + i][y + j] = distance[x][y] + 1
-                        links[x + i][y + j] = [x, y]
-                        queue.append([x + i, y + j])
+                    self.get_logger().info("Checking %d %d" % (new_x, new_y))
+                    if abs(i) == abs(j) and distance[new_x][new_y] > distance[x][y] + math.sqrt(2):
+                        distance[new_x][new_y] = distance[x][y] + math.sqrt(2)
+                        links[new_x][new_y] = [x, y]
+                        queue.append([new_x, new_y])
+                    elif distance[new_x][new_y] > distance[x][y] + 1:
+                        distance[new_x][new_y] = distance[x][y] + 1
+                        links[new_x][new_y] = [x, y]
+                        queue.append([new_x, new_y])
         x, y = map_target_x, map_target_y
         current_direction = [0, 0]
         while links[x][y] is not None:
@@ -174,6 +179,7 @@ class PathPlanner(Node):
         pose_array = PoseArray()
         for pose_stamped in self._path.poses:
             # Access attribute of each pose object
+            self.get_logger().info("Appending pose %f %f" % (pose_stamped.pose.position.x, pose_stamped.pose.position.y))
             pose_array.poses.append(pose_stamped.pose)
             # Do something with attribute_value
         self.get_logger().info("Publishing poses")
@@ -200,8 +206,6 @@ class PathPlanner(Node):
         pose.pose.position.x = world_x
         pose.pose.position.y = world_y
         pose.pose.position.z = 0.01  # 1 cm up so it will be above ground level
-        
-        self.get_logger().info("Publishing path: world_x: %f, world_y: %f, %f, %f" % (world_x, world_y, x, y))
 
         q = quaternion_from_euler(0.0, 0.0, yaw)
         pose.pose.orientation.x = q[0]
