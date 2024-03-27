@@ -5,7 +5,7 @@ from std_msgs.msg import Int16MultiArray, MultiArrayDimension
 
 # "{layout: {dim: [{label: '', size: 0, stride: 0}], data_offset: 0}, data: [12000,12000,12000,12000,12000,12000,500,500,500,500,500,500]}"
 
-ANGLE_LIMITS_LOW = [4200, 3100, 3200, 3000, 3750, 1000]
+ANGLE_LIMITS_LOW = [200, 3100, 3200, 3000, 750, 1000]
 ANGLE_LIMITS_HIGH = [12050, 21500, 20500, 23000, 17050, 22000]
 ANGLE_HOMES = [4200, 12000, 12000, 12000, 12000, 12000]
 PERIOD = 0.1
@@ -17,6 +17,10 @@ class JoyStickController(Node):
         self.joint_pos_sub = self.create_subscription(JointState, topic='/servo_pos_publisher', callback=self.joint_pos_cb, qos_profile=10)
         self.joycon_sub = self.create_subscription(Joy, topic='/joy', callback=self.joy_cb, qos_profile=10)
         self.joint_cmd_pub = self.create_publisher(Int16MultiArray, '/multi_servo_cmd_sub', 10)
+        
+        
+        #ADDED FOR DEBUGGING PURPOSES
+        self.joint_cmd_sub = self.create_subscription(Int16MultiArray, '/multi_servo_cmd_sub', callback=self.joint_cmd_cb, qos_profile=10)
         
         self.last_joint_cmd_pub_time = self.get_clock().now()
         
@@ -34,6 +38,33 @@ class JoyStickController(Node):
         self.init_cnt = 0
         
         self.joint_pos_sub
+        
+        
+        #ADDED FOR DEBUGGING PURPOSES
+        self.prev_state = []
+        
+    
+    
+    
+    
+     #ADDED FOR DEBUGGING PURPOSES
+    def joint_cmd_cb(self, msg:Int16MultiArray):
+        assert len(msg.data) == 12
+        
+        
+        self.joint_angles[0] = msg.data[0]
+        self.joint_angles[1] = msg.data[1]
+        self.joint_angles[2] = msg.data[2]
+        self.joint_angles[3] = msg.data[3]
+        self.joint_angles[4] = msg.data[4]
+        self.joint_angles[5] = msg.data[5]
+        
+        print(self.joint_angles)
+        
+        self.prev_state = self.joint_angles
+    
+    
+    
         
     def joy_cb(self, msg:Joy):
         # axes: left-stick horizontal, left-stick verticle, LT, right-stick horizontal, right-stick verticle, RT, left-cross horizontal, left-cross verticle
@@ -63,9 +94,11 @@ class JoyStickController(Node):
             self.joy_cmd.axes[5] = -1
         self.joy_cmd.axes[5] = -self.joy_cmd.axes[5] + 1
         
+        self.joint_angles[0] += int(self.joy_cmd.axes[6] * 70) # left-cross horizontal
+        self.joint_angles[2] += int(self.joy_cmd.axes[7] * 100) # left-cross verticle
         self.joint_angles[5] += int(self.joy_cmd.axes[3] * 250) # right-stick horizontal
         self.joint_angles[3] += int(self.joy_cmd.axes[4] * 70) # right-stick verticle
-        self.joint_angles[0] += int(self.joy_cmd.axes[1] * 300) # left-stick verticle
+        self.joint_angles[1] += int(self.joy_cmd.axes[1] * 300) # left-stick verticle
         self.joint_angles[4] += int(self.joy_cmd.axes[2] * 35) - int(self.joy_cmd.axes[5] * 35) # LT & RT
         self.joint_times = [90] * 6
             
