@@ -23,9 +23,10 @@ class GRID_STATES:
         pass
 
 class PathPlanner(Node):
-    threshold_distance = 4 # to improve later (robot's radius)
+    threshold_distance = 0.16 # half of the robot's width
     target_x = None
     target_y = None
+    completed = False
     origin_x = 0.0
     origin_y = 0.0
     map = OccupancyGrid()
@@ -97,14 +98,19 @@ class PathPlanner(Node):
         
         self.get_logger().info("Dijkstra")
 
-        map_origin_x, map_origin_y = self.from_world_to_map(self.origin_x, self.origin_y)
-        map_target_x, map_target_y = self.from_world_to_map(self.target_x, self.target_y)
-                        
+        map_origin_x, map_origin_y = self.from_coordinates_to_grid_index(self.origin_x, self.origin_y)
+        map_target_x, map_target_y = self.from_coordinates_to_grid_index(self.target_x, self.target_y)
+                                
         matrix_map = np.array(self.map.data).reshape((self.map.info.height, self.map.info.width))
+        
+        if matrix_map[map_target_x, map_target_y] == GRID_STATES.OCCUPIED:
+            self.get_logger().info("Origin is an obstacle")
+            return None
         
         # Create an empty buffer grid
         obstacle_buffer = np.zeros_like(matrix_map)
-        threshold_nb_cells = self.threshold_distance
+        threshold_nb_cells = self.from_meters_to_square_nb(self.threshold_distance)
+        self.get_logger().info("Threshold: %d" % threshold_nb_cells)
         
         # Iterate over each cell in the occupancy grid
         for i in range(matrix_map.shape[0]):
@@ -140,6 +146,7 @@ class PathPlanner(Node):
             [x, y] = queue.pop(0)
             visited[x][y] = True
             if x == map_target_x and y == map_target_y:
+                self.completed = True
                 break
             for i in range(-1, 2):
                 for j in range(-1, 2):
@@ -159,6 +166,12 @@ class PathPlanner(Node):
                         distance[x + i][y + j] = distance[x][y] + 1
                         links[x + i][y + j] = [x, y]
                         queue.append([x + i, y + j])
+                        
+        if not self.completed:
+            self.get_logger().info("No path found")
+            return None
+        
+        self.completed = False    
         x, y = map_target_x, map_target_y
         current_direction = [0, 0]
         while links[x][y] is not None:
@@ -196,7 +209,7 @@ class PathPlanner(Node):
 
         pose = PoseStamped()
         pose.header = self._path.header
-        world_x, world_y = self.from_map_to_world(x, y)
+        world_x, world_y = self.from_grid_index_to_coordinates(x, y)
         pose.pose.position.x = world_x
         pose.pose.position.y = world_y
         pose.pose.position.z = 0.01  # 1 cm up so it will be above ground level
@@ -213,7 +226,7 @@ class PathPlanner(Node):
 
         self._path_pub.publish(self._path)
 
-    def from_map_to_world(self, x, y):
+    def from_grid_index_to_coordinates(self, x, y):
         """Transforms a pair of map coordinates to world coordinates.
 
         Keyword arguments:
@@ -232,7 +245,7 @@ class PathPlanner(Node):
 
         return x, y
 
-    def from_world_to_map(self, x, y):
+    def from_coordinates_to_grid_index(self, x, y):
         """Transforms a pair of world coordinates to map coordinates.
 
         Keyword arguments:
@@ -250,6 +263,18 @@ class PathPlanner(Node):
         x = int(world_y / self.map.info.resolution)
 
         return x, y  
+    
+    def from_meters_to_square_nb(self, meters):
+        """Transforms a distance in meters to the number of squares.
+
+        Keyword arguments:
+        meters -- distance in meters
+
+        Returns:
+        squares -- distance in squares
+        """
+
+        return math.ceil(meters / self.map.info.resolution)
 
 
 
