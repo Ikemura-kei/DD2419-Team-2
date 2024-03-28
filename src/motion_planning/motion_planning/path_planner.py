@@ -29,21 +29,23 @@ class PathPlanner(Node):
     target_x = None
     target_y = None
     completed = False
-    origin_x = 0.0
-    origin_y = 0.0
+    origin_x = None
+    origin_y = None
     map = OccupancyGrid()
     def __init__(self):
         super().__init__('path_planner')
 
         # Initialize the transform listener and assign it a buffer
         self.tf2Buffer = Buffer(cache_time=None)
+        self.tfBuffer = Buffer(cache_time=None)
 
         #transform listener fills the buffer
         self.listener = TransformListener(self.tf2Buffer, self)
+        self.listener2 = TransformListener(self.tfBuffer, self)
 
         self.map_sub = self.create_subscription(OccupancyGrid, '/map', self.map_cb, 10)
 
-        self.goal_sub = self.create_subscription(Point, '/plan_goal', self.goal_cb, 10)
+        self.goal_sub = self.create_subscription(PointStamped, '/plan_goal', self.goal_cb, 10)
 
         self._point_pub = self.create_publisher(
             PointStamped, '/clicked_point', 10)
@@ -69,15 +71,15 @@ class PathPlanner(Node):
         
         self._point_pub.publish(pointStamped) 
 
-    def goal_cb(self, msg:Point):
+    def goal_cb(self, msg:PointStamped):
         stamp = rclpy.time.Time()
 
-        transform_base2odom = self.tf2Buffer.lookup_transform('odom', 'base_link', stamp)
+        transform_base2odom = self.tf2Buffer.lookup_transform(msg.header.frame_id, 'base_link', stamp)
         target_pose = PoseStamped()
         target_pose.header.frame_id = 'base_link'
         target_pose.header.stamp = stamp.to_msg()
-        target_pose.pose.position.x = msg.x
-        target_pose.pose.position.y = msg.y
+        target_pose.pose.position.x = msg.point.x
+        target_pose.pose.position.y = msg.point.y
         target_pose.pose.orientation.w = 1.0
         target_pose.pose.orientation.x = target_pose.pose.orientation.y = target_pose.pose.orientation.z = 0.0
         target_pose = do_transform_pose_stamped(target_pose, transform_base2odom)
@@ -94,10 +96,22 @@ class PathPlanner(Node):
         
 
     def dijkstra(self):
-        if len(self.map.data) == 0 or self.target_x is None or self.target_y is None or self.origin_x is None or self.origin_y is None:
+        if len(self.map.data) == 0 or self.target_x is None or self.target_y is None:
             return None
         
         self.get_logger().info("Dijkstra")
+        
+        # Compute robot's position
+        child_frame = 'base_link'
+        parent_frame = 'odom'
+        stamp = rclpy.time.Time()
+        
+        if self.tfBuffer.can_transform(parent_frame, child_frame, stamp) == 0:
+            return
+            
+        transform = self.tfBuffer.lookup_transform(parent_frame, child_frame, stamp)
+        self.origin_x = transform.transform.translation.x
+        self.origin_y = transform.transform.translation.y
 
         map_origin_x, map_origin_y = self.from_coordinates_to_grid_index(self.origin_x, self.origin_y)
         map_target_x, map_target_y = self.from_coordinates_to_grid_index(self.target_x, self.target_y)

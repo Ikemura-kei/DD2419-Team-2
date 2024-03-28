@@ -1,9 +1,7 @@
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Joy
-from geometry_msgs.msg import Point, PoseArray
-from visualization_msgs.msg import MarkerArray, Marker
-import numpy as np
+from geometry_msgs.msg import Point, PoseArray, PointStamped
 import pandas as pd
 import random
 from nav_msgs.msg import OccupancyGrid
@@ -28,7 +26,7 @@ class MS3ExplorationNode(Node):
         # Read the TSV file into a pandas DataFrame
         df = pd.read_csv(self.WORKSPACE_FILE_PATH, sep='\t')
         # Store the data into a variable named 'points'
-        self.workspace_points = df[['y', 'x']].values.tolist()
+        self.workspace_points = df[['x', 'y']].values.tolist()
         
         self.state = FSMStates.INIT
         self.joy_state = False
@@ -41,13 +39,13 @@ class MS3ExplorationNode(Node):
         self.MIN_OBJ_DISTANCE = 0.3 # m
         self.goal_reached = False
         self.intermediate_goal_reached = False
-        self.obj_position = Point()
+        self.obj_position = PointStamped()
         self.map = OccupancyGrid()
         self.intermediate_goal = Point()
         self.planned_poses = PoseArray()
         self.MAX_SEND_GOAL_TIMEOUT = 0.45
         
-        self.goal_pub = self.create_publisher(Point, '/plan_goal', 10)
+        self.goal_pub = self.create_publisher(PointStamped, '/plan_goal', 10)
         self.map_pub = self.create_publisher(OccupancyGrid, '/map', 10)
         self.target_position_pub = self.create_publisher(Point, '/target_position', 10)
         
@@ -97,9 +95,10 @@ class MS3ExplorationNode(Node):
             if len(self.map.data) > 0 and self.joy_state:
                 self.state = FSMStates.COMPUTING_PATH
                 random_point = random.choice(self.workspace_points)
-                self.obj_position.x = random_point[0]
-                self.obj_position.y = random_point[1]
-                self.get_logger().info('==> Sending goal {} {}'.format(self.obj_position.x, self.obj_position.y))
+                self.obj_position.point.x = random_point[0]
+                self.obj_position.point.y = random_point[1]
+                self.obj_position.header.frame_id = 'base_link'
+                self.get_logger().info('==> Sending goal {} {}'.format(self.obj_position.point.x, self.obj_position.point.y))
                 self.map_pub.publish(self.map)
                 self.goal_pub.publish(self.obj_position)
         
@@ -134,7 +133,6 @@ class MS3ExplorationNode(Node):
             if ((self.get_clock().now() - self.finish_time).nanoseconds / 1e9) > self.FINISH_TIMEOUT:
                 self.get_logger().info('==> Timeout finished, should restart a new loop setting state to FSMStates.WAITING')
                 self.state = FSMStates.WAITING
-                self.joy_state = False
                 # pass
                 
             

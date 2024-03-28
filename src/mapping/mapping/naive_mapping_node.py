@@ -143,7 +143,7 @@ class NaiveMappingNode(Node):
         points_map = points_map[:, mask==1]
         
         # -- add points to the candidate map --
-        #self.raw_candidate_map[points_map[1], points_map[0]] += 1
+        self.raw_candidate_map[points_map[1], points_map[0]] += 1
         
         # -- post-process the candidate map --
         update_mask = np.where(self.raw_candidate_map>self.UPDATE_TRHESH, 1, 0)
@@ -155,8 +155,8 @@ class NaiveMappingNode(Node):
         self.raw_candidate_map[update_mask==1] = 0
         
         # -- pubish map --
-        # self.candidate_map.data = self.raw_candidate_map.reshape((-1)).tolist()
-        # self.candidate_map_pub.publish(self.candidate_map)
+        self.candidate_map.data = self.raw_candidate_map.reshape((-1)).tolist()
+        self.candidate_map_pub.publish(self.candidate_map)
         self.map.data = self.raw_map.reshape((-1)).tolist()
         
         # -- if the map's data is only zeros, then don't publish (just for MS2)--
