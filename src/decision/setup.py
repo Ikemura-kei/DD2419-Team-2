@@ -26,6 +26,7 @@ setup(
             'ms2_decision_tree_node = decision.ms2_decision_tree_node:main',
             'ms2_go_to_obj_planning_node = decision.ms2_go_to_obj_planning_node:main',
             'ms3_exploration_node = decision.ms3_exploration_node:main',
+            'ms2_pick_and_place_node = decision.ms2_pick_and_place_node:main'
         ],
     },
 )
