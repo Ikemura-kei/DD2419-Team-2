@@ -17,6 +17,7 @@ import numpy as np
 
 class GRID_STATES:
     EMPTY = 0
+    BORDER = -100
     OCCUPIED = 100
     
     def __init__():
@@ -27,8 +28,8 @@ class PathPlanner(Node):
     target_x = None
     target_y = None
     completed = False
-    origin_x = 0.0
-    origin_y = 0.0
+    origin_x = None
+    origin_y = None
     map = OccupancyGrid()
     def __init__(self):
         super().__init__('path_planner')
@@ -36,13 +37,15 @@ class PathPlanner(Node):
 
         # Initialize the transform listener and assign it a buffer
         self.tf2Buffer = Buffer(cache_time=None)
+        self.tfBuffer = Buffer(cache_time=None)
 
         #transform listener fills the buffer
         self.listener = TransformListener(self.tf2Buffer, self)
+        self.listener2 = TransformListener(self.tfBuffer, self)
 
         self.map_sub = self.create_subscription(OccupancyGrid, '/map', self.map_cb, 10)
 
-        self.goal_sub = self.create_subscription(Point, '/plan_goal', self.goal_cb, 10)
+        self.goal_sub = self.create_subscription(PointStamped, '/plan_goal', self.goal_cb, 10)
 
         self._point_pub = self.create_publisher(
             PointStamped, '/clicked_point', 10)
@@ -68,15 +71,15 @@ class PathPlanner(Node):
         
         self._point_pub.publish(pointStamped) 
 
-    def goal_cb(self, msg:Point):
+    def goal_cb(self, msg:PointStamped):
         stamp = rclpy.time.Time()
 
-        transform_base2odom = self.tf2Buffer.lookup_transform('odom', 'base_link', stamp)
+        transform_base2odom = self.tf2Buffer.lookup_transform(msg.header.frame_id, 'base_link', stamp)
         target_pose = PoseStamped()
         target_pose.header.frame_id = 'base_link'
         target_pose.header.stamp = stamp.to_msg()
-        target_pose.pose.position.x = msg.x
-        target_pose.pose.position.y = msg.y
+        target_pose.pose.position.x = msg.point.x
+        target_pose.pose.position.y = msg.point.y
         target_pose.pose.orientation.w = 1.0
         target_pose.pose.orientation.x = target_pose.pose.orientation.y = target_pose.pose.orientation.z = 0.0
         target_pose = do_transform_pose_stamped(target_pose, transform_base2odom)
@@ -93,19 +96,35 @@ class PathPlanner(Node):
         
 
     def dijkstra(self):
-        if len(self.map.data) == 0 or self.target_x is None or self.target_y is None or self.origin_x is None or self.origin_y is None:
+        if len(self.map.data) == 0 or self.target_x is None or self.target_y is None:
             return None
         
         self.get_logger().info("Dijkstra")
+        
+        # Compute robot's position
+        child_frame = 'base_link'
+        parent_frame = 'odom'
+        stamp = rclpy.time.Time()
+        
+        if self.tfBuffer.can_transform(parent_frame, child_frame, stamp) == 0:
+            return
+            
+        transform = self.tfBuffer.lookup_transform(parent_frame, child_frame, stamp)
+        self.origin_x = transform.transform.translation.x
+        self.origin_y = transform.transform.translation.y
 
         map_origin_x, map_origin_y = self.from_coordinates_to_grid_index(self.origin_x, self.origin_y)
         map_target_x, map_target_y = self.from_coordinates_to_grid_index(self.target_x, self.target_y)
+        self.get_logger().info("Target: %d %d" % (map_target_x, map_target_y))
                                 
         matrix_map = np.array(self.map.data).reshape((self.map.info.height, self.map.info.width))
         
+        # Good filter but conflicts with the exploration phase
         if matrix_map[map_target_x, map_target_y] == GRID_STATES.OCCUPIED:
-            self.get_logger().info("Origin is an obstacle")
+            self.get_logger().info("Destination is an obstacle")
             return None
+        elif matrix_map[map_target_x, map_target_y] == GRID_STATES.BORDER:
+            self.get_logger().info("Destination is a border")
         
         # Create an empty buffer grid
         obstacle_buffer = np.zeros_like(matrix_map)
@@ -142,6 +161,7 @@ class PathPlanner(Node):
             links.append([None for x in range(len(matrix_map[0]))])
         distance[map_origin_x][map_origin_y] = 0
         queue.append([map_origin_x, map_origin_y])
+        
         while len(queue) > 0:
             [x, y] = queue.pop(0)
             visited[x][y] = True
@@ -152,20 +172,20 @@ class PathPlanner(Node):
                 for j in range(-1, 2):
                     if i == 0 and j == 0:
                         continue
-                    if x + i < 0 or x + i >= len(matrix_map[0]) or y + j < 0 or y + j >= len(matrix_map):
+                    new_x = x + i
+                    new_y = y + j
+                    if  new_x < 0 or new_x >= len(matrix_map) or new_y < 0 or new_y >= len(matrix_map[0]):
                         continue
-                    if visited[x + i][y + j] or matrix_map[x + i][y + j] == GRID_STATES.OCCUPIED:
+                    if (visited[new_x][new_y] or matrix_map[new_x][new_y] == GRID_STATES.OCCUPIED or (matrix_map[new_x][new_y] == GRID_STATES.BORDER and (new_x != map_target_x or new_y != map_target_y))):
                         continue
-                    if (i == j or i == -j):
-                        if distance[x + i][y + j] > distance[x][y] + math.pow(2,0.5):
-                            distance[x + i][y + j] = distance[x][y] + math.pow(2,0.5)
-                            links[x + i][y + j] = [x, y]
-                            queue.append([x + i, y + j])
-                        continue
-                    if distance[x + i][y + j] > distance[x][y] + 1:
-                        distance[x + i][y + j] = distance[x][y] + 1
-                        links[x + i][y + j] = [x, y]
-                        queue.append([x + i, y + j])
+                    if abs(i) == abs(j) and distance[new_x][new_y] > distance[x][y] + math.sqrt(2):
+                        distance[new_x][new_y] = distance[x][y] + math.sqrt(2)
+                        links[new_x][new_y] = [x, y]
+                        queue.append([new_x, new_y])
+                    elif distance[new_x][new_y] > distance[x][y] + 1:
+                        distance[new_x][new_y] = distance[x][y] + 1
+                        links[new_x][new_y] = [x, y]
+                        queue.append([new_x, new_y])
                         
         if not self.completed:
             self.get_logger().info("No path found")
@@ -213,8 +233,6 @@ class PathPlanner(Node):
         pose.pose.position.x = world_x
         pose.pose.position.y = world_y
         pose.pose.position.z = 0.01  # 1 cm up so it will be above ground level
-        
-        self.get_logger().info("Publishing path: world_x: %f, world_y: %f, %f, %f" % (world_x, world_y, x, y))
 
         q = quaternion_from_euler(0.0, 0.0, yaw)
         pose.pose.orientation.x = q[0]

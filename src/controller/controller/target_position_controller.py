@@ -48,11 +48,10 @@ class TargetPositionController(Node):
         msg = String()
         msg.data = 'Task completed'
         self._completion_publisher.publish(msg)
-        self.get_logger().info('Published task completion')
         
     def target_position_cb(self, msg:Point):
-        self.get_logger().info('Received target position: %f, %f' % (msg.x, msg.y))
         stamp = rclpy.time.Time()
+        self.get_logger().info('Received target position: %f, %f' % (msg.x, msg.y))
 
         self.goal_t = stamp
         self.target_x, self.target_y = msg.x, msg.y       
@@ -99,8 +98,9 @@ class TargetPositionController(Node):
         target_orientation = robot_orientation-math.atan2(distance_y, distance_x)
         
         distance_to_target = math.sqrt(distance_x**2 + distance_y**2)
-        
+
         self.get_logger().info('\033[36mDISTANCE TO TARGET: %f\033[0m' % (distance_to_target))
+        
         # Compute desired angular velocity using a proportional controller
         angular_velocity = self.alpha * target_orientation
         
@@ -123,8 +123,6 @@ class TargetPositionController(Node):
              twist_msg.linear.x = 0.0
              twist_msg.angular.z = 0.0
              
-        # TO TEST: Publish the DutyCycles message
-        self.get_logger().info('Publishing twist message: linear: %f, angular: %f' % (twist_msg.linear.x, twist_msg.angular.z))
         self._twist_publisher.publish(twist_msg)
 
 def main():
