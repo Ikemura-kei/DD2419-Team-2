@@ -24,8 +24,7 @@ class GRID_STATES:
         pass
 
 class PathPlanner(Node):
-    #threshold_distance = 0.16 # half of the robot's width
-    threshold_distance = 0.16
+    threshold_distance = 0.16 # half of the robot's width
     target_x = None
     target_y = None
     completed = False
@@ -34,6 +33,7 @@ class PathPlanner(Node):
     map = OccupancyGrid()
     def __init__(self):
         super().__init__('path_planner')
+        self.get_logger().info('Welcome to path planner')
 
         # Initialize the transform listener and assign it a buffer
         self.tf2Buffer = Buffer(cache_time=None)
@@ -207,7 +207,6 @@ class PathPlanner(Node):
         pose_array = PoseArray()
         for pose_stamped in self._path.poses:
             # Access attribute of each pose object
-            self.get_logger().info("Appending pose %f %f" % (pose_stamped.pose.position.x, pose_stamped.pose.position.y))
             pose_array.poses.append(pose_stamped.pose)
             # Do something with attribute_value
         self.get_logger().info("Publishing poses")

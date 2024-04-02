@@ -87,6 +87,7 @@ class CartesianController(Node):
 
             pwm = (a * error) + (b * self.int_error_r) + (c * self.d_error_l)
             pwm = min(max(pwm,-100), 100)/100
+            self.get_logger().info('error right: {} and int r:{}'.format(error,self.int_error_r))
         else: #left motor
             error = self.desired_wl - self.actual_wl
             self.int_error_l = self.int_error_l + (error * self.dt)
@@ -99,6 +100,7 @@ class CartesianController(Node):
 
             pwm = (a * error) + (b * self.int_error_l) + (c * self.d_error_l)
             pwm = min(max(pwm,-100), 100)/100
+            self.get_logger().info('error left: {} and int l:{}'.format(error,self.int_error_l))
         return pwm
     
 
