@@ -1,0 +1,30 @@
+{
+  "configurations": [
+    {
+      "browse": {
+        "databaseFilename": "${default}",
+        "limitSymbolsToIncludedHeaders": false
+      },
+      "includePath": [
+        "/home/team2/DD2419-Team-2/install/robp_phidgets_temperature/include/**",
+        "/home/team2/DD2419-Team-2/install/robp_phidgets_spatial/include/**",
+        "/home/team2/DD2419-Team-2/install/robp_phidgets_motors/include/**",
+        "/home/team2/DD2419-Team-2/install/robp_phidgets_encoders/include/**",
+        "/home/team2/DD2419-Team-2/install/robp_interfaces/include/**",
+        "/opt/ros/humble/include/**",
+        "/home/team2/DD2419-Team-2/src/robp_robot/robp_phidgets/robp_phidgets_encoders/include/**",
+        "/home/team2/DD2419-Team-2/src/robp_robot/robp_phidgets/robp_phidgets_motors/include/**",
+        "/home/team2/DD2419-Team-2/src/robp_robot/robp_phidgets/robp_phidgets_spatial/include/**",
+        "/home/team2/DD2419-Team-2/src/robp_robot/robp_phidgets/robp_phidgets_temperature/include/**",
+        "/home/team2/DD2419-Team-2/src/rplidar_ros/include/**",
+        "/usr/include/**"
+      ],
+      "name": "ROS",
+      "intelliSenseMode": "gcc-x64",
+      "compilerPath": "/usr/bin/gcc",
+      "cStandard": "gnu11",
+      "cppStandard": "c++14"
+    }
+  ],
+  "version": 4
+}

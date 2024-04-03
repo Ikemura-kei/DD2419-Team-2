@@ -6,15 +6,20 @@ import os
 
 def generate_launch_description():
     
+    # -- locate the bag file --
     bag_file = os.path.join(get_package_share_directory('bringup'), '../../../../bags', 'scene_1_traj_1')
+
+    # -- launch the bag file --
     bag_node = launch.actions.ExecuteProcess(
             cmd=['ros2', 'bag', 'play', bag_file],
             output='screen'
         )
     
+    # -- launch the odometry node --
     odometry_node = Node(package='odometry', executable='odometry', output='screen')
     
-    this_dir = get_package_share_directory('mapping')
+    # -- launch the rviz node --
+    this_dir = get_package_share_directory('slam')
     rviz_config = 'rviz/mapping.rviz'
     rviz_config = os.path.join(this_dir, rviz_config)
     rviz_node = Node(executable='rviz2', package='rviz2', arguments=['-d', rviz_config])

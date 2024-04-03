@@ -1,7 +1,7 @@
 from setuptools import find_packages, setup
 import os
 from glob import glob
-package_name = 'mapping'
+package_name = 'slam'
 
 setup(
     name=package_name,
@@ -23,7 +23,8 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'naive_mapping_node = mapping.naive_mapping_node:main'
+            'naive_mapping_node = slam.naive_mapping_node:main',
+            'ekf_slam_node = slam.ekf_slam_node:main',
         ],
     },
 )
