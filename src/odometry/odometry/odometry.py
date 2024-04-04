@@ -13,6 +13,7 @@ from tf_transformations import quaternion_from_euler
 from geometry_msgs.msg import TransformStamped
 from robp_interfaces.msg import Encoders
 from nav_msgs.msg import Path
+from nav_msgs.msg import Odometry as Odo
 from geometry_msgs.msg import PoseStamped
 
 
@@ -31,6 +32,7 @@ class Odometry(Node):
 
         # Initialize the path publisher
         self._path_pub = self.create_publisher(Path, 'path', 10)
+        self.odometry_pub = self.create_publisher(Odo, '/odometry', 10)
         # Store the path here
         self._path = Path()
     
@@ -80,6 +82,22 @@ class Odometry(Node):
         stamp = msg.header.stamp
         
         self.get_logger().info('Odometry: x: %f, y: %f, yaw: %f, stamp sec: %f, stamp nanosec: %f' % (self._x, self._y, self._yaw, stamp.sec, stamp.nanosec))
+
+        # -- publish the odometry message --
+        odometry = Odo()
+        odometry.header.stamp = stamp
+        odometry.header.frame_id = 'odom'
+        odometry.child_frame_id = 'base_link'
+        odometry.pose.pose.position.x = self._x
+        odometry.pose.pose.position.y = self._y
+        q = quaternion_from_euler(0.0, 0.0, self._yaw)
+        odometry.pose.pose.orientation.x = q[0]
+        odometry.pose.pose.orientation.y = q[1]
+        odometry.pose.pose.orientation.z = q[2]
+        odometry.pose.pose.orientation.w = q[3]
+        odometry.twist.twist.linear.x = v
+        odometry.twist.twist.angular.z = w
+        self.odometry_pub.publish(odometry)
 
         self.broadcast_transform(stamp, self._x, self._y, self._yaw)
         self.publish_path(stamp, self._x, self._y, self._yaw)
