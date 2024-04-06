@@ -31,10 +31,6 @@ def ego2global(x, y, th, pnts):
     pnts_homo = pnts_homo[...,None] # (N, 3, 1)
     new_pnts = np.squeeze(np.matmul(homo, pnts_homo), axis=-1) # (N, 3)
     
-    # print(homo)
-    # print(pnts[0])
-    # print(new_pnts[0])
-    
     return new_pnts[:,:2] # (N, 2)
 
 class EKF_SLAM_Node(Node):
@@ -61,13 +57,13 @@ class EKF_SLAM_Node(Node):
         self.point_marker_template = self.prep_point_marker_template()
         self.MIN_RANGE = 1.251
         self.last_odom_time = None
-        self.MAX_NUM_LANDMARK = 10
+        self.MAX_NUM_LANDMARK = 5
         self.mu = np.zeros(3+2*self.MAX_NUM_LANDMARK)
         self.sigma = np.eye(3+2*self.MAX_NUM_LANDMARK)
 
         self.R = np.zeros((3+2*self.MAX_NUM_LANDMARK, 3+2*self.MAX_NUM_LANDMARK)) # motion noise
-        self.R[:3, :3] = np.diag([0.873**2, 0.72**2, 10.0**2])
-        self.Q = np.diag([2.88**2, 2.88**2]) # measurement noise
+        self.R[:3, :3] = np.diag([0.6**2, 0.5**2, 1.45**2])
+        self.Q = np.diag([2.825**2, 4.25**2]) # measurement noise
 
         self.path = Path()
         self.path.header.frame_id = 'map'
@@ -133,8 +129,7 @@ class EKF_SLAM_Node(Node):
         e = e[line_validity == 1,...]
         ms = ms[line_validity == 1]
         cs = cs[line_validity == 1]        
-        z = self.pnt_on_line_closest_to(self.get_anchor_in_rob_frame(mu_cp), ms, cs) # (N, 2)
-        # print(f"pos: {pos}")
+        z = np.stack([ms, cs], axis=1) # (K, 2)
 
         line_markers = MarkerArray()
         pnt_markers = MarkerArray()
@@ -147,7 +142,7 @@ class EKF_SLAM_Node(Node):
             
             # print(f"line {i}: y = {m}x + {c}")
             line_markers.markers.append(self.prep_line_marker(0.13, 0.87, s[i,0], s[i,1], e[i,0], e[i,1], self.line_id))
-            pnt_markers.markers.append(self.prep_point_marker(0.87, 0.13, z[i,0], z[i,1], self.pnt_id))
+            pnt_markers.markers.append(self.prep_point_marker(0.87, 0.13, 1, z[i,1]+z[i,0], self.pnt_id))
 
         self.line_marker_pub.publish(line_markers)
         self.point_marker_pub.publish(pnt_markers)
@@ -156,6 +151,8 @@ class EKF_SLAM_Node(Node):
         while(self.lock):
             pass
         self.lock = True
+        print(f"mu: {mu_cp}")
+        print(f"b: {self.b}")
         self.mu, self.sigma, self.b = self.update(z, mu_cp, sigma_cp, self.Q, self.b)
         self.lock = False
 
@@ -340,36 +337,45 @@ class EKF_SLAM_Node(Node):
 
         cos_th = np.cos(theta)
         sin_th = np.sin(theta)
-        x_diff = mu[3::2] - x
         y_diff = mu[4::2] - y
 
-        z_hat_x = cos_th * x_diff + sin_th * y_diff # (N,)
-        z_hat_y = -sin_th * x_diff + cos_th * y_diff # (N,)
+        m_b = (-sin_th + cos_th * mu[3::2]) / (cos_th + sin_th * mu[3::2])
+        c_b = sin_th * x + cos_th * y_diff - (sin_th * cos_th * x - sin_th**2 * y_diff - cos_th**2 * mu[3::2] * x + sin_th * cos_th * mu[3::2] * y_diff) / (cos_th + sin_th * mu[3::2])
 
-        return np.stack([z_hat_x, z_hat_y], axis=1) # (N,2)
+        return np.stack([m_b, c_b], axis=1) # (N,2)
     
-    def associate(self, mu:np.ndarray, z_hat:np.ndarray, sigma:np.ndarray, z:np.ndarray, b:np.ndarray, outlier_threshold=1.0, new_landmark_threshold=2.25):
+    def associate(self, mu:np.ndarray, z_hat:np.ndarray, sigma:np.ndarray, z:np.ndarray, b:np.ndarray, outlier_threshold=0.4, new_landmark_threshold=2.85):
         c = np.ones(len(z)).astype(np.int32) * -1
         N = self.MAX_NUM_LANDMARK
         
         new = self.num_obs_landmarks < 1
+        K = len(z)
         if new:
-            pos = ego2global(mu[0], mu[1], mu[2], z)
+            p1_b = np.stack([np.zeros(K), z[:,1]], axis=1) # points of (0, c) in body frame
+            p2_b = np.stack([np.ones(K), z[:,1] + z[:, 0]], axis=1) # points of (1, c+m) in body frame
+            p1_g = ego2global(mu[0], mu[1], mu[2], p1_b)
+            p2_g = ego2global(mu[0], mu[1], mu[2], p2_b)
+
+            m_g = (p2_g[:,1] - p1_g[:,1]) / (p2_g[:,0] - p1_g[:,0] + 1e-9) # (y2 - y1) / (x2 - x1)
+            c_g = p1_g[:,1] - m_g * p1_g[:,0] # y - mx
             for i in range(len(z)):
                 b[self.num_obs_landmarks] = 1
-                mu[3+2*self.num_obs_landmarks] = pos[i, 0]
-                mu[4+2*self.num_obs_landmarks] = pos[i, 1]
+                mu[3+2*self.num_obs_landmarks] = m_g[i]
+                mu[4+2*self.num_obs_landmarks] = c_g[i]
                 if (self.num_obs_landmarks + 1) < N:
                     self.num_obs_landmarks += 1
                 c[i] = -1
             return b, c
 
-        zs = np.tile(z[:,None,:], (1, len(z_hat), 1))
+        p_hat = np.stack([np.ones(len(z_hat)), z_hat[:,1] + z_hat[:,0]], axis=1)
+        p = np.stack([np.ones(K), z[:,1] + z[:, 0]], axis=1)
+        ps = np.tile(p[:,None,:], (1, len(z_hat), 1))
         
+        REDICULOUS_THD = 10.25
         for i in range(len(z)):
-            diff = z_hat - zs[i]
-            print(f"z_hat: {z_hat}")
-            print(f"zs[i]: {zs[i]}")
+            diff = p_hat - ps[i]
+            # print(f"z_hat: {z_hat}")
+            # print(f"zs[i]: {zs[i]}")
             # print(f"diff: {diff}")
             dists = np.sqrt(diff[:,0]**2 + diff[:,1]**2)
 
@@ -379,12 +385,17 @@ class EKF_SLAM_Node(Node):
                 c[i] = min_idx
             else:
                 c[i] = -1
-                if dists[min_idx] >= new_landmark_threshold:
+                if dists[min_idx] >= new_landmark_threshold and dists[min_idx] < REDICULOUS_THD:
                     b[self.num_obs_landmarks] = 1
-                    # print(zs[i][0,:].shape)
-                    pos = ego2global(mu[0], mu[1], mu[2], zs[i][0,:][None,...])
-                    mu[3+2*self.num_obs_landmarks] = pos[0, 0]
-                    mu[4+2*self.num_obs_landmarks] = pos[0, 1]
+                    p1_b = np.array([[0, z[i,1]]]) # points of (0, c) in body frame
+                    p2_b = np.array([[1, z[i,1] + z[i,0]]]) # points of (1, c+m) in body frame
+                    p1_g = ego2global(mu[0], mu[1], mu[2], p1_b)[0]
+                    p2_g = ego2global(mu[0], mu[1], mu[2], p2_b)[0]
+
+                    m_g = (p2_g[1] - p1_g[1]) / (p2_g[0] - p1_g[0] + 1e-9) # (y2 - y1) / (x2 - x1)
+                    c_g = p1_g[1] - m_g * p1_g[0] # y - mx
+                    mu[3+2*self.num_obs_landmarks] = m_g
+                    mu[4+2*self.num_obs_landmarks] = c_g
                     if (self.num_obs_landmarks + 1) < N:
                         self.num_obs_landmarks += 1
 
@@ -394,21 +405,24 @@ class EKF_SLAM_Node(Node):
         H = np.zeros((2, len(mu)))
 
         x, y, theta = mu[:3]
-        cos_th = np.cos(theta)
-        sin_th = np.sin(theta)
+        cth = np.cos(theta)
+        sth = np.sin(theta)
 
-        x_l = mu[3+2*c]
-        y_l = mu[4+2*c]
+        m_g = mu[3+2*c]
+        c_g = mu[4+2*c]
 
-        x_diff = x_l - x
-        y_diff = y_l - y
+        diff = c_g - y
 
-        H[0, :3] = np.array([-cos_th, -sin_th, -sin_th*x_diff + cos_th*y_diff])
-        H[0, 3+2*c] = cos_th
-        H[0, 4+2*c] = sin_th
-        H[1, :3] = np.array([sin_th, -cos_th, -cos_th*x_diff - sin_th*y_diff])
-        H[1, 3+2*c] = -sin_th
-        H[1, 4+2*c] = cos_th
+        H[0, 2] = -1 - (-sth + cth * m_g)**2 / (cth + sth * m_g)**2
+        H[0, 3+2*c] = cth / (cth + sth * m_g) - (-sth + cth * m_g) * sth / (cth + sth * m_g)**2
+        H[0, 4+2*c] = 0
+        H[1, 0] = sth - (sth * cth - cth**2 * m_g) / (cth + sth * m_g)
+        H[1, 1] = -cth - (sth**2 - cth * sth * m_g) / (cth + sth * m_g)
+        H[1, 2] = cth * x - sth * diff - ((cth**2 - sth**2) * x - 2 * cth * sth * diff + 2 * cth * sth * m_g * x + (cth**2 - sth**2) * m_g * diff)\
+                 / (cth + sth * m_g) + ((-sth + m_g * cth) * (sth * cth * x - sth**2 * diff - cth**2 * m_g * x + sth * cth * m_g * diff)) / (cth + sth * m_g)**2
+        H[1, 3+2*c] = - (-cth**2 * x + sth * cth * diff) / (cth + sth * m_g) +\
+              sth * (sth * cth * x - sth**2 * diff - cth**2 * m_g * x + sth * cth * m_g * diff) / (cth + sth * m_g)**2
+        H[1, 4+2*c] = -H[1, 1]
 
         return H
 

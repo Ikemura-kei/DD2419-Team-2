@@ -25,6 +25,8 @@ setup(
         'console_scripts': [
             'naive_mapping_node = slam.naive_mapping_node:main',
             'ekf_slam_node = slam.ekf_slam_node:main',
+            'tune_odom_node = slam.tune_odom_node:main',
+            'ekf_slam_v2_node = slam.ekf_slam_v2_node:main',
         ],
     },
 )
