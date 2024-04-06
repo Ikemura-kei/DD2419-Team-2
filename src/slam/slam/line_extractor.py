@@ -174,6 +174,7 @@ def seed_segment_growing(seed, pnts, P_MIN, L_MIN, epsilon, L_MAX, verbose=False
         print("--> The length of the grown segment: ", line_length)
     # if (j - i + 1) >= P_MIN and line_length >= L_MIN and line_length < 2.1:
     if (j - i + 1) >= P_MIN and line_length >= L_MIN and line_length < L_MAX:
+        print("--> The length of the grown segment: ", line_length)
         return [i, j, m_prev ,c_prev]
     
     return None

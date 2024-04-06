@@ -2,5 +2,6 @@ install/
 build/
 log/
 bags/*.zip
+bags/*
 bags/rosbag2*/
 *.pyc
