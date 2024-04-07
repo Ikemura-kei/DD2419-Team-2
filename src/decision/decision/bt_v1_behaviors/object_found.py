@@ -22,7 +22,7 @@ class ObjectFound(TemplateBehavior):
             return py_trees.common.Status.FAILURE
 
         # -- add any newly seen object to the state dictionary --
-        for obj in object_list:
+        for obj in object_list.object_list:
             if obj not in self.object_states:
                 self.object_states[obj] = False # initilize to not being picked up yet
 

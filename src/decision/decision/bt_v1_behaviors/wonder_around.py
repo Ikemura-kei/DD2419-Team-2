@@ -11,5 +11,6 @@ class WonderAround(TemplateBehavior):
 
     def update(self):
         # TODO: send command to wonder around here
+        print('wondering around...')
         
         return py_trees.common.Status.RUNNING
