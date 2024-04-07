@@ -4,6 +4,8 @@ from decision.bt_v1_behaviors import *
 import rclpy
 import sys
 
+from dd2419_interfaces.msg import ObjectList
+
 def main():
     print("Hello World from bt_v1_node.py")
 
@@ -43,6 +45,9 @@ def create_root():
     # -- LEVEL 2 --
     topics2bb = py_trees.composites.Parallel(name='topics2bb', policy=py_trees.common.ParallelPolicy.SuccessOnAll(synchronise=False))
     # TODO: define topics to subscribe here
+    object_list2bb = ptr.subscribers.ToBlackboard('object_list2bb', '/object_list',\
+                 ObjectList, 10, blackboard_variables='object_list', clearing_policy=py_trees.common.ClearingPolicy.ON_INITIALISE) # make sure we clear the detection so that we can perform missing check
+
     task = py_trees.composites.Sequence(name='task', memory=False)
     
     # -- LEVEL 3 --
@@ -103,6 +108,7 @@ def create_root():
 
     # -- ASSEMBLY: LEVEL 2 --
     task.add_children([work_not_done, work])
+    topics2bb.add_children([object_list2bb])
 
     # -- ASSEMBLY: LEVEL 1 --
     root.add_children([topics2bb, task])
