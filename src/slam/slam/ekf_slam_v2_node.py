@@ -36,6 +36,7 @@ def ego2global(x, y, th, pnts):
 class EKF_SLAM_Node(Node):
     def __init__(self) -> None:
         super().__init__('ekf_slam_node')
+        self.START_T = 1.5
         self.L_MIN = 1.95
         self.L_MAX = 2.85
         self.line_extractor = LineExtractor(EPSILON=0.028, DELTA=0.07, S_NUM=4, P_MIN=8, L_MIN=self.L_MIN, L_MAX=self.L_MAX)
@@ -47,6 +48,7 @@ class EKF_SLAM_Node(Node):
         self.odometry_sub
 
         self.line_marker_pub = self.create_publisher(MarkerArray, '/extracted_lines', 10)
+        self.line_landmark_marker_pub = self.create_publisher(MarkerArray, '/landmark_lines', 10)
         self.point_marker_pub = self.create_publisher(MarkerArray, '/extracted_points', 10)
 
         self.path_pub = self.create_publisher(Path, '/ekf_slam_traj', 10)
@@ -56,14 +58,15 @@ class EKF_SLAM_Node(Node):
         self.line_marker_template = self.prep_line_marker_template()
         self.point_marker_template = self.prep_point_marker_template()
         self.MIN_RANGE = 1.251
+        self.MAX_RANGE = 4.45
         self.last_odom_time = None
-        self.MAX_NUM_LANDMARK = 5
+        self.MAX_NUM_LANDMARK = 6
         self.mu = np.zeros(3+2*self.MAX_NUM_LANDMARK)
         self.sigma = np.eye(3+2*self.MAX_NUM_LANDMARK)
 
         self.R = np.zeros((3+2*self.MAX_NUM_LANDMARK, 3+2*self.MAX_NUM_LANDMARK)) # motion noise
-        self.R[:3, :3] = np.diag([0.6**2, 0.5**2, 1.45**2])
-        self.Q = np.diag([2.825**2, 4.25**2]) # measurement noise
+        self.R[:3, :3] = np.diag([0.78**2, 0.59**2, 7.35**2])
+        self.Q = np.diag([0.05**2, 0.15**2]) # measurement noise
 
         self.path = Path()
         self.path.header.frame_id = 'map'
@@ -75,6 +78,7 @@ class EKF_SLAM_Node(Node):
 
         self.line_id = 0
         self.pnt_id = 500
+        self.start = False
 
         self.is_logging = True
         if self.is_logging:
@@ -96,7 +100,7 @@ class EKF_SLAM_Node(Node):
         assert len(ranges) == len(bearings) # check if the number of ranges and bearings are the same
 
         # -- filter out invalid ranges --
-        valid_indices = np.where(np.isfinite(ranges) * (ranges >= self.MIN_RANGE))[0]
+        valid_indices = np.where(np.isfinite(ranges) * (ranges >= self.MIN_RANGE) * (ranges <= self.MAX_RANGE))[0]
         ranges = ranges[valid_indices]
         bearings = bearings[valid_indices]
 
@@ -148,6 +152,9 @@ class EKF_SLAM_Node(Node):
         self.point_marker_pub.publish(pnt_markers)
 
         # -- update the ekf state --
+        if not self.start:
+            return
+        
         while(self.lock):
             pass
         self.lock = True
@@ -159,8 +166,10 @@ class EKF_SLAM_Node(Node):
     def odometry_cb(self, odometry:Odometry):
         if self.last_odom_time is None:
             self.last_odom_time = odometry.header.stamp
+            self.start_t = odometry.header.stamp
             return
-        
+        if ((odometry.header.stamp.sec + odometry.header.stamp.nanosec / 1e9) - (self.start_t.sec + self.start_t.nanosec / 1e9)) > self.START_T:
+            self.start = True
         dt = (odometry.header.stamp.sec + odometry.header.stamp.nanosec / 1e9) - (self.last_odom_time.sec + self.last_odom_time.nanosec / 1e9)
         self.last_odom_time = odometry.header.stamp
 
@@ -187,12 +196,24 @@ class EKF_SLAM_Node(Node):
         translation = np.array([mu_cp[0] - pos_odom_rotated[0], mu_cp[1] - pos_odom_rotated[1], 0])
         self._tf_broadcaster.sendTransform(self.prep_transform(translation[0], translation[1], q_diff, odometry.header.stamp))
 
-        # -- construct path for visualization --
+        # -- construct path and landmark for visualization --
         self.path.header.stamp = odometry.header.stamp
         self.path.poses.append(self.construct_pose(mu_cp[0], mu_cp[1], mu_cp[2], odometry.header.stamp))
         if len(self.path.poses) > 1500:
             self.path.poses.pop(0)
         self.path_pub.publish(self.path)
+
+        line_markers = MarkerArray()
+        for i in range(self.num_obs_landmarks):
+            m = self.mu[3+i*2]
+            c = self.mu[4+i*2]
+            x1 = -9.0
+            x2 = 9.0
+            line = self.prep_line_marker(0.75, 0.25, x1, x1*m+c, x2, x2*m+c, i)
+            line.header.frame_id = 'map'
+            # line.lifetime = Duration(sec=0, nanosec=int(0.5 * 1e9))
+            line_markers.markers.append(line)
+        self.line_landmark_marker_pub.publish(line_markers)
 
     def prep_transform(self, x, y, q, stamp):
         t = TransformStamped()
@@ -344,7 +365,7 @@ class EKF_SLAM_Node(Node):
 
         return np.stack([m_b, c_b], axis=1) # (N,2)
     
-    def associate(self, mu:np.ndarray, z_hat:np.ndarray, sigma:np.ndarray, z:np.ndarray, b:np.ndarray, outlier_threshold=0.4, new_landmark_threshold=2.85):
+    def associate(self, mu:np.ndarray, z_hat:np.ndarray, sigma:np.ndarray, z:np.ndarray, b:np.ndarray, outlier_threshold=2.8, new_landmark_threshold=3.25):
         c = np.ones(len(z)).astype(np.int32) * -1
         N = self.MAX_NUM_LANDMARK
         
@@ -370,6 +391,9 @@ class EKF_SLAM_Node(Node):
         p_hat = np.stack([np.ones(len(z_hat)), z_hat[:,1] + z_hat[:,0]], axis=1)
         p = np.stack([np.ones(K), z[:,1] + z[:, 0]], axis=1)
         ps = np.tile(p[:,None,:], (1, len(z_hat), 1))
+        th_hat = np.arctan2(z_hat[:,0] - z_hat[:,1], 1)
+        th = np.arctan2(z[:,0] - z[:,1], 1)
+        ths = np.tile(th[:,None], (1, len(z_hat)))
         
         REDICULOUS_THD = 10.25
         for i in range(len(z)):
@@ -378,10 +402,14 @@ class EKF_SLAM_Node(Node):
             # print(f"zs[i]: {zs[i]}")
             # print(f"diff: {diff}")
             dists = np.sqrt(diff[:,0]**2 + diff[:,1]**2)
+            th_diff = np.abs(th_hat-ths[i])
 
             min_idx = np.argmin(dists)
             print("min dist: {}".format(dists[min_idx]))
+            print("min th diff: {}".format(th_diff[min_idx]))
             if dists[min_idx] < outlier_threshold:
+                c[i] = min_idx
+            elif th_diff[min_idx] < 0.15:
                 c[i] = min_idx
             else:
                 c[i] = -1
