@@ -13,7 +13,7 @@ class ObjectAtHand(TemplateBehavior):
 
     def update(self):
         try:
-            is_pick_done = self.blackboard.get('is_pick_done')
+            is_pick_done = self.blackboard.get('is_pick_done').data
         except:
             return py_trees.common.Status.FAILURE
         

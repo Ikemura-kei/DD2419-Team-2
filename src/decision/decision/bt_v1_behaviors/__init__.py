@@ -12,3 +12,4 @@ from .place_object import PlaceObject
 from .wonder_around import WonderAround
 from .work_not_done import WorkNotDone
 from .mark_work_done import MarkWorkDone
+from .proc_data import ProcData

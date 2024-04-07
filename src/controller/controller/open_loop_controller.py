@@ -41,8 +41,8 @@ class DutyCyclePublisher(Node):
             self.right_joy = 0.0
         
         else:
-            self.left_joy = 0.5 - (round(msg.axes[2],3)/2)
-            self.right_joy = 0.5 - (round(msg.axes[5],3)/2)
+            self.left_joy = (round(msg.axes[1],3)/2)
+            self.right_joy = (round(msg.axes[3],3)/2)
 
         # print("Left {}".format(self.left_joy))
         # print("Right {}".format(self.right_joy))

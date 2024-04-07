@@ -17,12 +17,10 @@ class ObjectNear(TemplateBehavior):
         # -- a dictionary containing object poses (as geometry_msgs.msg.PoseStamped), the naming format of objects follows that above --
         self.register_value('object_poses', read=True, write=False)
 
-        self.TF_TIMEOUT = rclpy.duration.Duration(seconds=0.35)
-        self.NEAR_DISTANCE_THRESHOLD = 0.12 # meters
+        self.TF_TIMEOUT = rclpy.duration.Duration(seconds=0)
+        self.NEAR_DISTANCE_THRESHOLD = 0.15 # meters
 
     def initialise(self) -> None:
-        self.buffer = Buffer(cache_time=rclpy.duration.Duration(seconds=10))
-        self.tf_listener = TransformListener(self.buffer, self.node)
         return super().initialise()
 
     def update(self):
@@ -30,18 +28,22 @@ class ObjectNear(TemplateBehavior):
             target_object = self.blackboard.get('target_object')
             object_poses = self.blackboard.get('object_poses')
         except:
+            print("ObjectNear: failed to get target_object or object_poses")
             return py_trees.common.Status.FAILURE
         
         pose_map:PoseStamped = object_poses[target_object]
         # -- NOTE: these pose information should be under the 'map' frame --
         try:
-            transform = self.buffer.lookup_transform('base_link', pose_map.header.frame_id, pose_map.header.stamp, self.TF_TIMEOUT)
+            transform = self.node.buffer.lookup_transform('base_link', pose_map.header.frame_id, pose_map.header.stamp, self.TF_TIMEOUT)
         except TransformException as e:
+            print("TransformException: ", e)
             return py_trees.common.Status.FAILURE
-        pose_base = do_transform_pose(pose_map, transform)
+        pose_base = do_transform_pose(pose_map.pose, transform)
+        print("pose_base: ", pose_base)
 
         # -- check if the object is near enough to pick --
-        distance  = np.sqrt(pose_base.pose.position.x**2 + pose_base.pose.position.y**2) # euclidian distance
+        distance  = np.sqrt(pose_base.position.x**2 + pose_base.position.y**2) # euclidian distance
+        print("distance: ", distance)
         if distance <= self.NEAR_DISTANCE_THRESHOLD:
             return py_trees.common.Status.SUCCESS
         else:

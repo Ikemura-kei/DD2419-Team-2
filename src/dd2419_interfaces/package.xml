@@ -22,4 +22,8 @@
 
   <member_of_group>rosidl_interface_packages</member_of_group>
 
+  <build_depend>geometry_msgs</build_depend>
+
+  <exec_depend>geometry_msgs</exec_depend>
+
 </package>

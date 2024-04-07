@@ -33,4 +33,5 @@ class PickObject(TemplateBehavior):
         self.pick_point.header = pose.header
         self.pick_point.point.x = pose.pose.position.x
         self.pick_point.point.y = pose.pose.position.y
-        self.node.pick_point_pub.publish(self.pick_point)
+        self.pick_point_pub.publish(self.pick_point)
+        return py_trees.common.Status.RUNNING

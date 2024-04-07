@@ -21,8 +21,6 @@ class BoxNear(TemplateBehavior):
         self.NEAR_DISTANCE_THRESHOLD = 0.105 # meters
 
     def initialise(self) -> None:
-        self.buffer = Buffer(cache_time=rclpy.duration.Duration(seconds=10))
-        self.tf_listener = TransformListener(self.buffer, self.node)
         return super().initialise()
 
     def update(self):
@@ -35,7 +33,7 @@ class BoxNear(TemplateBehavior):
         pose_map:PoseStamped = box_poses[target_box]
         # -- NOTE: these pose information should be under the 'map' frame --
         try:
-            transform = self.buffer.lookup_transform('base_link', pose_map.header.frame_id, pose_map.header.stamp, self.TF_TIMEOUT)
+            transform = self.node.buffer.lookup_transform('base_link', pose_map.header.frame_id, pose_map.header.stamp, self.TF_TIMEOUT)
         except TransformException as e:
             return py_trees.common.Status.FAILURE
         pose_base = do_transform_pose(pose_map, transform)

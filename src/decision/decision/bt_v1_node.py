@@ -2,14 +2,29 @@ import py_trees_ros as ptr
 import py_trees
 from decision.bt_v1_behaviors import *
 import rclpy
+from rclpy.node import Node
 import sys
 
-from dd2419_interfaces.msg import ObjectList
+from dd2419_interfaces.msg import ObjectList, ObjectPoses
+
+from tf2_ros import TransformException
+from tf2_ros.transform_listener import TransformListener
+from tf2_ros.buffer import Buffer
+
+from std_msgs.msg import Bool
+
+class BTV1Node(Node):
+    def __init__(self):
+        super().__init__('bt_v1_node')
+        
+        self.buffer = Buffer(cache_time=rclpy.duration.Duration(seconds=10))
+        self.tf_listener = TransformListener(self.buffer, self)
 
 def main():
     print("Hello World from bt_v1_node.py")
 
     rclpy.init()
+    node = BTV1Node()
 
     root = create_root()
     tree = ptr.trees.BehaviourTree(
@@ -17,7 +32,7 @@ def main():
         unicode_tree_debug=True
     )
     try:
-        tree.setup(node_name="behaviour_tree", timeout=15.0)
+        tree.setup(node_name="behaviour_tree", timeout=15.0, node=node)
     except ptr.exceptions.TimedOutError as e:
         tree.shutdown()
         rclpy.try_shutdown()
@@ -27,7 +42,7 @@ def main():
         rclpy.try_shutdown()
         sys.exit(1)
 
-    tree.tick_tock(period_ms=300.0)
+    tree.tick_tock(period_ms=100.0)
 
     try:
         rclpy.spin(tree.node)
@@ -46,8 +61,11 @@ def create_root():
     topics2bb = py_trees.composites.Parallel(name='topics2bb', policy=py_trees.common.ParallelPolicy.SuccessOnAll(synchronise=False))
     # TODO: define topics to subscribe here
     object_list2bb = ptr.subscribers.ToBlackboard('object_list2bb', '/object_list',\
-                 ObjectList, 10, blackboard_variables='object_list', clearing_policy=py_trees.common.ClearingPolicy.ON_INITIALISE) # make sure we clear the detection so that we can perform missing check
-
+                 ObjectPoses, 10, blackboard_variables={'object_list': 'object_list.object_list', 'objects': None}, clearing_policy=py_trees.common.ClearingPolicy.ON_INITIALISE) # make sure we clear the detection so that we can perform missing check
+    proc_data = ProcData()
+    pick_done2bb = ptr.subscribers.ToBlackboard('pick_done2bb', '/is_pick_done',\
+                 Bool, 10, blackboard_variables='is_pick_done', clearing_policy=py_trees.common.ClearingPolicy.ON_INITIALISE) # make sure we clear the detection so that we can perform missing check
+    
     task = py_trees.composites.Sequence(name='task', memory=False)
     
     # -- LEVEL 3 --
@@ -108,7 +126,7 @@ def create_root():
 
     # -- ASSEMBLY: LEVEL 2 --
     task.add_children([work_not_done, work])
-    topics2bb.add_children([object_list2bb])
+    topics2bb.add_children([object_list2bb, pick_done2bb, proc_data])
 
     # -- ASSEMBLY: LEVEL 1 --
     root.add_children([topics2bb, task])
