@@ -17,7 +17,7 @@ class BoxNear(TemplateBehavior):
         # -- the name of the box we set to put our object in, naming format follows "<obj_type>_<unique_id>", for example "cube_1" --
         self.register_value(key="target_box", read=False, write=True)
 
-        self.TF_TIMEOUT = rclpy.duration.Duration(seconds=0.35)
+        self.TF_TIMEOUT = rclpy.duration.Duration(seconds=0.1)
         self.NEAR_DISTANCE_THRESHOLD = 0.105 # meters
 
     def initialise(self) -> None:
@@ -33,13 +33,15 @@ class BoxNear(TemplateBehavior):
         pose_map:PoseStamped = box_poses[target_box]
         # -- NOTE: these pose information should be under the 'map' frame --
         try:
-            transform = self.node.buffer.lookup_transform('base_link', pose_map.header.frame_id, pose_map.header.stamp, self.TF_TIMEOUT)
+            transform = self.node.buffer.lookup_transform('base_link', \
+                pose_map.header.frame_id, pose_map.header.stamp, self.TF_TIMEOUT)
         except TransformException as e:
             return py_trees.common.Status.FAILURE
-        pose_base = do_transform_pose(pose_map, transform)
+        pose_base = do_transform_pose(pose_map.pose, transform)
 
         # -- check if the object is near enough to pick --
-        distance  = np.sqrt(pose_base.pose.position.x**2 + pose_base.pose.position.y**2) # euclidian distance
+        distance  = np.sqrt(pose_base.position.x**2 + pose_base.position.y**2) # euclidian distance
+        print(f"Distance to {target_box}: {distance}")
         if distance <= self.NEAR_DISTANCE_THRESHOLD:
             return py_trees.common.Status.SUCCESS
         else:

@@ -62,6 +62,8 @@ def create_root():
     # TODO: define topics to subscribe here
     object_list2bb = ptr.subscribers.ToBlackboard('object_list2bb', '/object_list',\
                  ObjectPoses, 10, blackboard_variables={'object_list': 'object_list.object_list', 'objects': None}, clearing_policy=py_trees.common.ClearingPolicy.ON_INITIALISE) # make sure we clear the detection so that we can perform missing check
+    box_list2bb = ptr.subscribers.ToBlackboard('box_list2bb', '/box_list',\
+                 ObjectPoses, 10, blackboard_variables={'box_list': 'object_list.object_list', 'boxes': None}, clearing_policy=py_trees.common.ClearingPolicy.ON_INITIALISE) # make sure we clear the detection so that we can perform missing check
     proc_data = ProcData()
     pick_done2bb = ptr.subscribers.ToBlackboard('pick_done2bb', '/is_pick_done',\
                  Bool, 10, blackboard_variables='is_pick_done', clearing_policy=py_trees.common.ClearingPolicy.ON_INITIALISE) # make sure we clear the detection so that we can perform missing check
@@ -126,7 +128,7 @@ def create_root():
 
     # -- ASSEMBLY: LEVEL 2 --
     task.add_children([work_not_done, work])
-    topics2bb.add_children([object_list2bb, pick_done2bb, proc_data])
+    topics2bb.add_children([object_list2bb, pick_done2bb, box_list2bb, proc_data])
 
     # -- ASSEMBLY: LEVEL 1 --
     root.add_children([topics2bb, task])

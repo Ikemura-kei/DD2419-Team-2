@@ -9,7 +9,7 @@ class PlaceObject(TemplateBehavior):
     def __init__(self, name="place_object"):
         super().__init__(name)
         # -- the time when we start placing object, used to determine if the object is placed successfully --
-        self.register_value('place_start_time', read=True, write=False)
+        self.register_value('place_start_time', read=True, write=True)
 
         self.place_pub = None
 

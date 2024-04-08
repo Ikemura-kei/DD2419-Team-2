@@ -8,8 +8,6 @@ class BoxFound(TemplateBehavior):
         super().__init__(name)
         # -- list of box names, specified by "<obj_type>_<unique_id>", i.e. what type of object it expects us to put inside + an unique identifier, e.g. 'cube_1' --
         self.register_value(key="box_list", read=True, write=False)
-        # # -- the poses of the boxes (specified by geometry_msgs.msg.PoseStamped), naming format follows that above --
-        # self.register_value(key="box_poses", read=True, write=False)
         # -- the name of the object we set to pick, naming format follows "<obj_type>_<unique_id>", for example "cube_1" --
         self.register_value(key="target_object", read=True, write=False)
         # -- the name of the box we set to put our object in, naming format follows that mentioned above --
