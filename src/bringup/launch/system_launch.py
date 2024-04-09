@@ -36,6 +36,10 @@ def generate_launch_description():
     # dummy map->odom
     map_2_odom = Node(executable='static_transform_publisher', package='tf2_ros', arguments=['--child-frame-id', 'odom', '--frame-id', 'map'])
     
-    ld = LaunchDescription([sensors_launch, chassis_launch, joystick_launch, decision_tree_debugger_node, map_2_odom, mapping_launch])
+    # -- launch path planner --
+    # path_planner_node = Node(package='motion_planning', executable='path_planner')
+    
+    ld = LaunchDescription([sensors_launch, chassis_launch, joystick_launch, decision_tree_debugger_node, map_2_odom, \
+        mapping_launch])
     
     return ld

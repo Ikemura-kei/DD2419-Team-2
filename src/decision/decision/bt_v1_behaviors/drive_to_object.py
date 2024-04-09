@@ -1,7 +1,10 @@
 import py_trees_ros as ptr
 import py_trees
 from decision.bt_v1_behaviors.template import TemplateBehavior
-from geometry_msgs.msg import PoseStamped
+from geometry_msgs.msg import PoseStamped, PointStamped
+from tf2_ros import TransformException
+from tf2_geometry_msgs.tf2_geometry_msgs import do_transform_pose
+import rclpy
 
 class DriveToObject(TemplateBehavior):
     def __init__(self, name="drive_to_object"):
@@ -11,7 +14,9 @@ class DriveToObject(TemplateBehavior):
         # -- a dictionary containing object poses (as geometry_msgs.msg.PoseStamped), the naming format of objects follows that above --
         self.register_value('object_poses', read=True, write=False)
 
+        self.TF_TIMEOUT = rclpy.duration.Duration(seconds=0.15)
     def initialise(self) -> None:
+        self.goal_pub = self.node.create_publisher(PointStamped, '/plan_goal', 10)
         return super().initialise()
 
     def update(self):
@@ -21,8 +26,21 @@ class DriveToObject(TemplateBehavior):
         except:
             return py_trees.common.Status.RUNNING
         
-        pose:PoseStamped = object_poses[target_object]
+        pose_map:PoseStamped = object_poses[target_object]
+        try:
+            transform = self.node.buffer.lookup_transform('base_link', \
+                pose_map.header.frame_id, pose_map.header.stamp, self.TF_TIMEOUT)
+        except TransformException as e:
+            return py_trees.common.Status.RUNNING
+        pose_base = do_transform_pose(pose_map.pose, transform)
 
-        # TODO: send command to drive to the object here
+        goal = PointStamped()
+        goal.header.frame_id = 'base_link'
+        goal.header.stamp = pose_map.header.stamp
+        goal.point.x = pose_base.position.x
+        goal.point.y = pose_base.position.y
+        # goal.point.x = pose_map.pose.position.x
+        # goal.point.y = pose_map.pose.position.y
+        self.goal_pub.publish(goal)
 
         return py_trees.common.Status.RUNNING

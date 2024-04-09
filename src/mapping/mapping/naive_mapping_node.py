@@ -15,7 +15,7 @@ from tf2_geometry_msgs.tf2_geometry_msgs import do_transform_point
 import pandas as pd
 
 class NaiveMappingNode(Node):
-    MAP_TOPIC = '/global_map'
+    MAP_TOPIC = '/map'
     WORKSPACE_FILE_PATH = 'assets/workspace.tsv'
     MAP_WIDTH = 12
     MAP_HEIGHT = 10.5
@@ -50,7 +50,7 @@ class NaiveMappingNode(Node):
         self.MAX_X = int(self.MAP_WIDTH / self.MAP_RESOLUTION)
         self.MAX_Y = int(self.MAP_HEIGHT / self.MAP_RESOLUTION)
         self.UPDATE_TRHESH = 1
-        self.MIN_RANGE_FILTER_THRESH = 0.2 # m
+        self.MIN_RANGE_FILTER_THRESH = 0.3 # m
         
         # -- initialize the map with the borders --
         self.init_map()
@@ -149,7 +149,7 @@ class NaiveMappingNode(Node):
         update_mask = np.where(self.raw_candidate_map>self.UPDATE_TRHESH, 1, 0)
         
         # -- add valid points from the candidate map to the map --
-        self.raw_map[update_mask==1] = 100
+        # self.raw_map[update_mask==1] = 100
         
         # -- remove valid points from the candidate map --
         self.raw_candidate_map[update_mask==1] = 0

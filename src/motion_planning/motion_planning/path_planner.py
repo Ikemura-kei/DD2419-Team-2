@@ -36,12 +36,10 @@ class PathPlanner(Node):
         self.get_logger().info('Welcome to path planner')
 
         # Initialize the transform listener and assign it a buffer
-        self.tf2Buffer = Buffer(cache_time=None)
         self.tfBuffer = Buffer(cache_time=None)
 
         #transform listener fills the buffer
-        self.listener = TransformListener(self.tf2Buffer, self)
-        self.listener2 = TransformListener(self.tfBuffer, self)
+        self.listener = TransformListener(self.tfBuffer, self)
 
         self.map_sub = self.create_subscription(OccupancyGrid, '/map', self.map_cb, 10)
 
@@ -58,7 +56,7 @@ class PathPlanner(Node):
         # Store the path here
         self._path = Path() 
 
-        self.timer = self.create_timer(0.1, self.dijkstra)
+        self.timer = self.create_timer(0.2, self.dijkstra)
 
     def publish_point(self):
         if self.target_x is None or self.target_y is None:
@@ -72,20 +70,22 @@ class PathPlanner(Node):
         self._point_pub.publish(pointStamped) 
 
     def goal_cb(self, msg:PointStamped):
-        stamp = rclpy.time.Time()
-
-        transform_base2odom = self.tf2Buffer.lookup_transform(msg.header.frame_id, 'base_link', stamp)
+        try:
+            transform_base2odom = self.tfBuffer.lookup_transform('odom', msg.header.frame_id, msg.header.stamp, rclpy.duration.Duration(seconds=0.15))
+        except Exception as e:
+            print(e)
+            return
         target_pose = PoseStamped()
         target_pose.header.frame_id = 'base_link'
-        target_pose.header.stamp = stamp.to_msg()
+        target_pose.header.stamp = msg.header.stamp
         target_pose.pose.position.x = msg.point.x
         target_pose.pose.position.y = msg.point.y
         target_pose.pose.orientation.w = 1.0
         target_pose.pose.orientation.x = target_pose.pose.orientation.y = target_pose.pose.orientation.z = 0.0
-        target_pose = do_transform_pose_stamped(target_pose, transform_base2odom)
-        self.goal_t = stamp
-        self.target_x = target_pose.pose.position.x
-        self.target_y = target_pose.pose.position.y
+        target_pose_odom = do_transform_pose_stamped(target_pose, transform_base2odom)
+        self.goal_t = msg.header.stamp
+        self.target_x = target_pose_odom.pose.position.x
+        self.target_y = target_pose_odom.pose.position.y
         self.publish_point()
         self.get_logger().info('Received goal: x: %f, y: %f' % (self.target_x, self.target_y))
         
@@ -104,12 +104,11 @@ class PathPlanner(Node):
         # Compute robot's position
         child_frame = 'base_link'
         parent_frame = 'odom'
-        stamp = rclpy.time.Time()
         
-        if self.tfBuffer.can_transform(parent_frame, child_frame, stamp) == 0:
+        if not self.tfBuffer.can_transform(parent_frame, child_frame, self.goal_t):
             return
             
-        transform = self.tfBuffer.lookup_transform(parent_frame, child_frame, stamp)
+        transform = self.tfBuffer.lookup_transform(parent_frame, child_frame, self.goal_t)
         self.origin_x = transform.transform.translation.x
         self.origin_y = transform.transform.translation.y
 

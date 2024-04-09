@@ -1,4 +1,5 @@
 import rclpy
+import rclpy.duration
 from rclpy.node import Node
 from dd2419_interfaces.msg import ObjectList, ObjectPoses
 from geometry_msgs.msg import PoseStamped
@@ -37,7 +38,7 @@ class BTV1Debugger(Node):
             self.object_list.poses.append(pose)
         
         self.box_list = ObjectPoses()
-        stamp = self.get_clock().now().to_msg()
+        stamp = (self.get_clock().now() - rclpy.time.Duration(seconds=1.5)).to_msg()
         for i, obj in enumerate(self.BOXES):
             self.box_list.object_list.object_list.append(obj)
             pose = PoseStamped()
@@ -53,7 +54,7 @@ class BTV1Debugger(Node):
 
     def run(self):
         print("bt_v1_debugger is running")
-        stamp = self.get_clock().now().to_msg()
+        stamp = (self.get_clock().now() - rclpy.time.Duration(seconds=1.5)).to_msg()
         for i in range(len(self.object_list.poses)):
             self.object_list.poses[i].header.stamp = stamp
         self.object_list_pub.publish(self.object_list)
