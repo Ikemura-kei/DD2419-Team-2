@@ -9,6 +9,7 @@ from launch.launch_description_sources import PythonLaunchDescriptionSource
 
 def generate_launch_description():
     bringup_pkg_dir = get_package_share_directory('bringup')
+    mapping_pkg_dir = get_package_share_directory('mapping')
     teleop_twist_joy_pkg_dir = get_package_share_directory('teleop_twist_joy')
     
     # -- launch sensors --
@@ -18,6 +19,10 @@ def generate_launch_description():
     # -- launch chassis (motor, encoder, odometry, etc.) --
     chassis_launch = IncludeLaunchDescription(PythonLaunchDescriptionSource(os.path.join(\
         bringup_pkg_dir, 'launch', 'chassis_launch.py')))
+    
+    # -- launch mapping module --
+    mapping_launch = IncludeLaunchDescription(PythonLaunchDescriptionSource(os.path.join(\
+        mapping_pkg_dir, 'launch', 'naive_mapping_launch.py')))
     
     # -- launch joy stick, for emergency control --
     joystick_launch = IncludeLaunchDescription(PythonLaunchDescriptionSource(os.path.join(\
@@ -31,6 +36,6 @@ def generate_launch_description():
     # dummy map->odom
     map_2_odom = Node(executable='static_transform_publisher', package='tf2_ros', arguments=['--child-frame-id', 'odom', '--frame-id', 'map'])
     
-    ld = LaunchDescription([sensors_launch, chassis_launch, joystick_launch, decision_tree_debugger_node, map_2_odom])
+    ld = LaunchDescription([sensors_launch, chassis_launch, joystick_launch, decision_tree_debugger_node, map_2_odom, mapping_launch])
     
     return ld
