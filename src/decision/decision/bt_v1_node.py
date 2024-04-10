@@ -10,7 +10,8 @@ from dd2419_interfaces.msg import ObjectList, ObjectPoses
 from tf2_ros import TransformException
 from tf2_ros.transform_listener import TransformListener
 from tf2_ros.buffer import Buffer
-
+from geometry_msgs.msg import PointStamped
+from sensor_msgs.msg import Joy
 from std_msgs.msg import Bool
 
 class BTV1Node(Node):
@@ -19,6 +20,8 @@ class BTV1Node(Node):
         
         self.buffer = Buffer(cache_time=rclpy.duration.Duration(seconds=10))
         self.tf_listener = TransformListener(self.buffer, self)
+        self.goal_pub = self.create_publisher(PointStamped, '/plan_goal', 10)
+        self.emergency_stop_pub = self.create_publisher(Bool, '/emergency_stop', 10)
 
 def main():
     print("Hello World from bt_v1_node.py")
@@ -64,6 +67,8 @@ def create_root():
                  ObjectPoses, 10, blackboard_variables={'object_list': 'object_list.object_list', 'objects': None}, clearing_policy=py_trees.common.ClearingPolicy.ON_INITIALISE) # make sure we clear the detection so that we can perform missing check
     box_list2bb = ptr.subscribers.ToBlackboard('box_list2bb', '/box_list',\
                  ObjectPoses, 10, blackboard_variables={'box_list': 'object_list.object_list', 'boxes': None}, clearing_policy=py_trees.common.ClearingPolicy.ON_INITIALISE) # make sure we clear the detection so that we can perform missing check
+    joy2bb = ptr.subscribers.ToBlackboard('joy2bb', '/joy',\
+                 Joy, 10, blackboard_variables='joy', clearing_policy=py_trees.common.ClearingPolicy.ON_INITIALISE) # make sure we clear the detection so that we can perform missing check
     proc_data = ProcData()
     pick_done2bb = ptr.subscribers.ToBlackboard('pick_done2bb', '/is_pick_done',\
                  Bool, 10, blackboard_variables='is_pick_done', clearing_policy=py_trees.common.ClearingPolicy.ON_INITIALISE) # make sure we clear the detection so that we can perform missing check
@@ -71,6 +76,7 @@ def create_root():
     task = py_trees.composites.Sequence(name='task', memory=False)
     
     # -- LEVEL 3 --
+    emergency_check = EmergencyStop()
     work_not_done = WorkNotDone()
     work = py_trees.composites.Sequence(name='work', memory=True)
 
@@ -127,8 +133,8 @@ def create_root():
     work.add_children([m_s_object_found, collect_object, place_object_, mark_work_done])
 
     # -- ASSEMBLY: LEVEL 2 --
-    task.add_children([work_not_done, work])
-    topics2bb.add_children([object_list2bb, pick_done2bb, box_list2bb, proc_data])
+    task.add_children([emergency_check, work_not_done, work])
+    topics2bb.add_children([object_list2bb, pick_done2bb, box_list2bb, proc_data, joy2bb])
 
     # -- ASSEMBLY: LEVEL 1 --
     root.add_children([topics2bb, task])

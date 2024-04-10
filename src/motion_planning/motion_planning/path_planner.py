@@ -36,7 +36,7 @@ class PathPlanner(Node):
         self.get_logger().info('Welcome to path planner')
 
         # Initialize the transform listener and assign it a buffer
-        self.tfBuffer = Buffer(cache_time=None)
+        self.tfBuffer = Buffer(cache_time=rclpy.duration.Duration(seconds=5))
 
         #transform listener fills the buffer
         self.listener = TransformListener(self.tfBuffer, self)
@@ -56,7 +56,8 @@ class PathPlanner(Node):
         # Store the path here
         self._path = Path() 
 
-        self.timer = self.create_timer(0.2, self.dijkstra)
+        self.last_time = self.get_clock().now() 
+        self.timer = self.create_timer(0.1, self.dijkstra)
 
     def publish_point(self):
         if self.target_x is None or self.target_y is None:
@@ -70,8 +71,12 @@ class PathPlanner(Node):
         self._point_pub.publish(pointStamped) 
 
     def goal_cb(self, msg:PointStamped):
+        can_transform = self.tfBuffer.can_transform('odom', msg.header.frame_id, msg.header.stamp, rclpy.duration.Duration(seconds=0.05))
+        if not can_transform:
+            return
+        
         try:
-            transform_base2odom = self.tfBuffer.lookup_transform('odom', msg.header.frame_id, msg.header.stamp, rclpy.duration.Duration(seconds=0.15))
+            transform_base2odom = self.tfBuffer.lookup_transform('odom', msg.header.frame_id, msg.header.stamp, rclpy.duration.Duration(seconds=0.05))
         except Exception as e:
             print(e)
             return
@@ -96,6 +101,9 @@ class PathPlanner(Node):
         
 
     def dijkstra(self):
+        dt = (self.get_clock().now() - self.last_time).nanoseconds / 1e9
+        self.last_time = self.get_clock().now()
+        
         if len(self.map.data) == 0 or self.target_x is None or self.target_y is None:
             return None
         
@@ -194,12 +202,12 @@ class PathPlanner(Node):
         x, y = map_target_x, map_target_y
         current_direction = [0, 0]
         while links[x][y] is not None:
-            if current_direction == [x-links[x][y][0], y-links[x][y][1]]:
-                x, y = links[x][y]
-                continue
-            current_direction = [x-links[x][y][0], y-links[x][y][1]]
-            self.publish_path(self.get_clock().now().to_msg(), x, y, 0.0)
+            # if current_direction == [x-links[x][y][0], y-links[x][y][1]]:
+            #     x, y = links[x][y]
+            #     continue
+            # current_direction = [x-links[x][y][0], y-links[x][y][1]]
             x, y = links[x][y]
+            self.publish_path(self.get_clock().now().to_msg(), x, y, 0.0)
 
         self.publish_path(self.get_clock().now().to_msg(), map_origin_x, map_origin_y, 0.0)
 

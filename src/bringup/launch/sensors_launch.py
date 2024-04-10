@@ -29,5 +29,5 @@ def generate_launch_description():
         usb_camera_launch,
         lidar_launch,
         realsense_launch,
-        view_launch
+        # view_launch
     ])

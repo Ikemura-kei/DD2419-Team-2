@@ -7,7 +7,7 @@ from robp_interfaces.msg import DutyCycles, Encoders
 from geometry_msgs.msg import Twist
 
 import math
-
+from std_msgs.msg import Bool
 
 class CartesianController(Node):
 
@@ -54,13 +54,26 @@ class CartesianController(Node):
         self.desired = self.create_subscription(Twist,'/motor_controller/twist',self.desired_callback,10)
         self.desired  # prevent unused variable warning
         
+        self.emergency_stop = self.create_subscription(Bool,'/emergency_stop',self.emergency_stop_callback,10)
+        self.emergency_stop  # prevent unused variable warning
+        
+        self.stop = False
+        
+    def emergency_stop_callback(self, msg:Bool):
+        self.stop = msg.data
+        
     def move_callback(self):
         msg = DutyCycles()
 
-        msg.duty_cycle_left = self.motion(self.alpha_l, self.beta_l, self.gamma_l, False)
-        msg.duty_cycle_right = self.motion(self.alpha_r, self.beta_r, self.gamma_r) * self.correcting_term_r
+        if not self.stop:
+            msg.duty_cycle_left = self.motion(self.alpha_l, self.beta_l, self.gamma_l, False)
+            msg.duty_cycle_right = self.motion(self.alpha_r, self.beta_r, self.gamma_r) * self.correcting_term_r
+        else:
+            msg.duty_cycle_left = 0
+            msg.duty_cycle_right = 0
+            
         self.publisher_.publish(msg)
-        #self.get_logger().info('Publishing: {} and {}'.format(msg.duty_cycle_left,msg.duty_cycle_right))
+        self.get_logger().info('Publishing: {} and {}'.format(msg.duty_cycle_left,msg.duty_cycle_right))
     
     def encoder_callback(self, msg):
         self.actual_wr = (2*math.pi*msg.delta_encoder_right *10)/360

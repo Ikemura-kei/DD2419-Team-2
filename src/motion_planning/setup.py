@@ -20,7 +20,8 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'path_planner = motion_planning.path_planner:main'
+            'path_planner = motion_planning.path_planner:main',
+            'trajectory_follower = motion_planning.trajectory_follower:main',
         ],
     },
 )

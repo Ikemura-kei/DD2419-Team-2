@@ -13,10 +13,11 @@ class DriveToObject(TemplateBehavior):
         self.register_value('target_object', read=True, write=False)
         # -- a dictionary containing object poses (as geometry_msgs.msg.PoseStamped), the naming format of objects follows that above --
         self.register_value('object_poses', read=True, write=False)
+        self.register_value('object_poses', read=True, write=False)
 
         self.TF_TIMEOUT = rclpy.duration.Duration(seconds=0.15)
+        
     def initialise(self) -> None:
-        self.goal_pub = self.node.create_publisher(PointStamped, '/plan_goal', 10)
         return super().initialise()
 
     def update(self):
@@ -41,6 +42,6 @@ class DriveToObject(TemplateBehavior):
         goal.point.y = pose_base.position.y
         # goal.point.x = pose_map.pose.position.x
         # goal.point.y = pose_map.pose.position.y
-        self.goal_pub.publish(goal)
+        self.node.goal_pub.publish(goal)
 
         return py_trees.common.Status.RUNNING

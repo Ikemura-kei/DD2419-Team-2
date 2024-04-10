@@ -18,7 +18,7 @@ class BoxNear(TemplateBehavior):
         self.register_value(key="target_box", read=False, write=True)
 
         self.TF_TIMEOUT = rclpy.duration.Duration(seconds=0.1)
-        self.NEAR_DISTANCE_THRESHOLD = 0.105 # meters
+        self.NEAR_DISTANCE_THRESHOLD = 0.145 # meters
 
     def initialise(self) -> None:
         return super().initialise()

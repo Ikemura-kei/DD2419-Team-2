@@ -29,17 +29,18 @@ def generate_launch_description():
         teleop_twist_joy_pkg_dir, 'launch/teleop-launch.py')), launch_arguments={'joy_config': 'xbox'}.items())
     
     # -- launch decision tree --
-    # decision_tree_node = Node(package='decision', executable='bt_v1_node', output='screen')
+    decision_tree_node = Node(package='decision', executable='bt_v1_node', output='screen')
     
     # -- launch decision tree debugger --
     decision_tree_debugger_node = Node(package='decision', executable='bt_v1_debugger')
     # dummy map->odom
     map_2_odom = Node(executable='static_transform_publisher', package='tf2_ros', arguments=['--child-frame-id', 'odom', '--frame-id', 'map'])
     
-    # -- launch path planner --
-    # path_planner_node = Node(package='motion_planning', executable='path_planner')
+    # -- launch path planner and trajectory follower --
+    path_planner_node = Node(package='motion_planning', executable='path_planner', output='screen')
+    trajectory_follower_node = Node(package='motion_planning', executable='trajectory_follower')
     
     ld = LaunchDescription([sensors_launch, chassis_launch, joystick_launch, decision_tree_debugger_node, map_2_odom, \
-        mapping_launch])
+        mapping_launch, path_planner_node, trajectory_follower_node, decision_tree_node])
     
     return ld
