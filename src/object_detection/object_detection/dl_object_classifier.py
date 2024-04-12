@@ -85,7 +85,7 @@ class Object_classifier(Node):
             t0 = time.time()
             cv_image = self.bridge.imgmsg_to_cv2(msg, "rgb8")
 
-            
+            print('Image received')
             if self.depth is not None:
                 self.compute_bb(msg.header.stamp, msg.header.frame_id, self.depth, cv_image, t0) 
 

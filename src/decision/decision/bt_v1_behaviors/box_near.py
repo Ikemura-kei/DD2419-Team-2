@@ -17,7 +17,7 @@ class BoxNear(TemplateBehavior):
         # -- the name of the box we set to put our object in, naming format follows "<obj_type>_<unique_id>", for example "cube_1" --
         self.register_value(key="target_box", read=False, write=True)
 
-        self.TF_TIMEOUT = rclpy.duration.Duration(seconds=0.1)
+        self.TF_TIMEOUT = rclpy.duration.Duration(seconds=0.015)
         self.NEAR_DISTANCE_THRESHOLD = 0.145 # meters
 
     def initialise(self) -> None:

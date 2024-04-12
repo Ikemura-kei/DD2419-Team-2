@@ -40,7 +40,16 @@ def generate_launch_description():
     path_planner_node = Node(package='motion_planning', executable='path_planner', output='screen')
     trajectory_follower_node = Node(package='motion_planning', executable='trajectory_follower')
     
+    # -- launch object detection stuff --
+    dl_classifier_node = Node(package='object_detection', executable='dl_object_classifier')
+    dl_post_processor_node = Node(package='object_detection', executable='dl_postprocessor')
+    object_tracker_node = Node(package='object_tracker', executable='object_tracker_node')
+    
     ld = LaunchDescription([sensors_launch, chassis_launch, joystick_launch, decision_tree_debugger_node, map_2_odom, \
-        mapping_launch, path_planner_node, trajectory_follower_node, decision_tree_node])
+        mapping_launch, path_planner_node, trajectory_follower_node, 
+        # decision_tree_node, 
+        dl_classifier_node,
+        dl_post_processor_node,
+        object_tracker_node])
     
     return ld

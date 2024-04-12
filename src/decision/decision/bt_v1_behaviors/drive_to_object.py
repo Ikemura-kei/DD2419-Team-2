@@ -15,7 +15,7 @@ class DriveToObject(TemplateBehavior):
         self.register_value('object_poses', read=True, write=False)
         self.register_value('object_poses', read=True, write=False)
 
-        self.TF_TIMEOUT = rclpy.duration.Duration(seconds=0.15)
+        self.TF_TIMEOUT = rclpy.duration.Duration(seconds=0.05)
         
     def initialise(self) -> None:
         return super().initialise()

@@ -33,6 +33,8 @@ class Odometry(Node):
         self._path_pub = self.create_publisher(Path, 'path', 10)
         # Store the path here
         self._path = Path()
+        
+        self.tf_broadcast_timer = self.create_timer(0.01, self.timer_callback)
     
         # Subscribe to encoder topic and call callback function on each recieved message
         self.create_subscription(
@@ -42,8 +44,26 @@ class Odometry(Node):
         self._x = 0.0
         self._y = 0.0
         self._yaw = 0.0
+        self.stamp = None
         
         self.last_time = None
+        
+        self.last_tf_broadcast_time = None
+        
+    def timer_callback(self):
+        if self.stamp is None:
+            return
+        
+        self.broadcast_transform(self.get_clock().now().to_msg(), self._x, self._y, self._yaw)
+        self.publish_path(self.get_clock().now().to_msg(), self._x, self._y, self._yaw)
+        
+        if self.last_tf_broadcast_time is None:
+            self.last_tf_broadcast_time = self.get_clock().now()
+            return
+        
+        dt = (self.get_clock().now() - self.last_tf_broadcast_time).nanoseconds / 1e9
+        # print('dt: %f' % dt)
+        self.last_tf_broadcast_time = self.get_clock().now()
 
     def encoder_callback(self, msg: Encoders):
         # The kinematic parameters for the differential configuration
@@ -78,12 +98,10 @@ class Odometry(Node):
         self._yaw = self._yaw + w * dt
                 
         stamp = msg.header.stamp
+        self.stamp = stamp
 
-        self.get_logger().info('Odometry: x: %f, y: %f, yaw: %f, stamp sec: %f, stamp nanosec: %f' % (self._x, self._y, self._yaw, stamp.sec, stamp.nanosec))
+        # self.get_logger().info('Odometry: x: %f, y: %f, yaw: %f, stamp sec: %f, stamp nanosec: %f' % (self._x, self._y, self._yaw, stamp.sec, stamp.nanosec))
         
-        self.broadcast_transform(stamp, self._x, self._y, self._yaw)
-        self.publish_path(stamp, self._x, self._y, self._yaw)
-
     def broadcast_transform(self, stamp, x, y, yaw):
         """Takes a 2D pose and broadcasts it as a ROS transform.
         Broadcasts a 3D transform with z, roll, and pitch all zero. 

@@ -23,6 +23,21 @@ import os
 from std_msgs.msg import String
 from builtin_interfaces.msg import Time
 from datetime import timedelta
+from typing import List
+
+class Instance():
+    postion = None
+    category_name = ""
+    stamp = None
+    bbox = [0, 0, 0, 0] # (x, y, width, height)
+    image = None
+    
+    def __init__(self, category_name, position, stamp, bbox, image) -> None:
+        self.category_name = category_name
+        self.position = position
+        self.stamp = stamp
+        self.bbox = bbox
+        self.image = image
 
 class Object_postprocessor(Node):
     def __init__(self):
@@ -42,7 +57,7 @@ class Object_postprocessor(Node):
 
         self.directory = "/home/team2/dd2419_ws/src/object_detection/object_detection/saved_instances"
         self.bridge = CvBridge()
-        self.threshold = 8
+        self.NUM_OBSERVATION_THRESHOLD = 8
         self.id = 0
         
         self.declare_parameter('reduce_categories', True)  # Default value is True
@@ -97,238 +112,237 @@ class Object_postprocessor(Node):
         # Initialize the transform broadcaster
         self.tf_broadcaster = TransformBroadcaster(self)
         
+        self.LOOK_BACK_DURATION = 2.0 # [s]
+        self.OBJECT_NEAR_THRESHOLD = 0.05 # [m]
+        self.OBJ_HEIGHT_THRESHOLD = 0.0425 # [m]
         
 
     def filter(self, batch, time):
-
         nb_msgs = len(batch)
-        if nb_msgs > 0:
-            # cluster on position
-            X = []
-            bb_list = []
-            for i in range(nb_msgs):
-                curr_msg = batch[i]
-                nb_bb = len(curr_msg.bounding_boxes)
-                for bb in curr_msg.bounding_boxes:
-                    bb_list.append(bb)
-                    X.append([bb.bb_center.x, bb.bb_center.y, bb.bb_center.z])
+        if nb_msgs == 0:
+            return
+        
+        # -- re-organize data into separate lists --
+        points = []
+        bb_list = []
+        for curr_msg in batch:
+            for bb in curr_msg.bounding_boxes:
+                bb_list.append(bb)
+                points.append([bb.bb_center.x, bb.bb_center.y, bb.bb_center.z])
+        
+        # -- compute pair-wise distances between all bboxes --
+        pair_distances = pdist(points, 'euclidean')
+        
+        if len(pair_distances) == 0:
+            return
+        
+        # -- cluster bboxes --
+        linkage_matrix = linkage(pair_distances, method='single', metric='euclidean')
+        clusters = fcluster(linkage_matrix, t=0.05, criterion='distance')
+
+        # -- keep object clusters with more than NUM_OBSERVATION_THRESHOLD bbox detected --
+        bbs_by_cluster = []
+        for this_cluster_index in np.unique(clusters):
+            bb_cluster = []
+            matched_indexes = [j for j, that_cluster_index in enumerate(clusters) if that_cluster_index == this_cluster_index ]
+            for index in matched_indexes:
+                bb_cluster.append(bb_list[index])
             
-            Y = pdist(X, 'euclidean')
+            num_observations = len(bb_cluster)
+            if num_observations > self.NUM_OBSERVATION_THRESHOLD:
+                bbs_by_cluster.append(bb_cluster)
+
+        # -- make conclusion on object position as well as object lable given multiple observations --
+        instances_to_save = []
+        for j, cluster in enumerate(bbs_by_cluster):
             
-            if len(Y) > 0:
-                Z = linkage(Y, method='single', metric='euclidean')
+            category_names = [o.category_name for o in cluster]
+            x = [o.bb_center.x for o in cluster]
+            y = [o.bb_center.y for o in cluster]
+            z = [o.bb_center.z for o in cluster]
+
+            # -- define category name as the maximum vote --
+            occurence_count = Counter(category_names)
+            category_name = occurence_count.most_common(1)[0][0]
             
-                clusters = fcluster(Z, t=0.05, criterion='distance')
+            # -- define object position as the mean of all observations --
+            x = np.mean(x)
+            y = np.mean(y)
+            z = np.mean(z)
+            if y < self.OBJ_HEIGHT_THRESHOLD:
+                continue
+            
+            # -- just pick a random bounding box as the bounding box of this object --
+            bb = cluster[int(self.NUM_OBSERVATION_THRESHOLD/2)]
+            
+            # -- just pick a random time stamp as the time stamp of this object --
+            bbox_stamp = bb.stamp
+            
+            # -- pick the image that is closest in time to the chosen bounding box time as our evidence --
+            closest_stamp_diff = float('inf')
+            closest_image = None
 
-
-                # keep clusters with more than threshold bb detected
-                bbs_by_cluster = []
-                for i in np.unique(clusters):
-                    bb_cluster = []
-                    a = [j for j in range(len(clusters)) if clusters[j] == i ]
-                    for index in a:
-                        bb_cluster.append(bb_list[index])
+            for image in self.image_buffer:
+                stamp = image.header.stamp        
+                stamp_diff = abs((bbox_stamp.sec * 1e9 + bbox_stamp.nanosec) - (stamp.sec * 1e9 + stamp.nanosec))
+                if stamp_diff < closest_stamp_diff:
+                    closest_stamp_diff = stamp_diff
+                    closest_image = image
                     
-                    if len(bb_cluster) > self.threshold:
-                        bbs_by_cluster.append(bb_cluster)
-    
-                    self.get_logger().info("Number of clusters: {}".format(len(bb_cluster)))
+            image = closest_image
+            
+            # -- finally, we construct an object instance out of all of the observations --
+            instances_to_save.append(Instance(category_name, [x, y, z], bbox_stamp, [bb.x, bb.y, bb.width, bb.height], image))
 
-                # take mean position and maximum category_name
-                instances_to_save = []
-                for cluster in bbs_by_cluster:
-                   
-                    category_names = [o.category_name for o in cluster]
-                    x = [o.bb_center.x for o in cluster]
-                    y = [o.bb_center.y for o in cluster]
-                    z = [o.bb_center.z for o in cluster]
-                    
-                    # avoid TF repeated timestamp warning
-                    time = time + rclpy.duration.Duration(seconds=0.05)
-                    occurence_count = Counter(category_names)
-                    category_name = occurence_count.most_common(1)[0][0]
-                    x = np.mean(x)
-                    y = np.mean(y)
-                    z = np.mean(z)
-                    
-                    bb = cluster[int(self.threshold/2)]
-                    bbox_stamp = bb.stamp
-                    
-                    closest_stamp_diff = float('inf')
-                    closest_image = None
+        self.save_instances(instances_to_save)
 
-                    for image in self.image_buffer:
-                        # Assuming each image has a stamp attribute
-                        stamp = image.header.stamp
-                        
-                        # Calculate the absolute difference between the target timestamp and the current image's timestamp
-                        stamp_diff = abs((bbox_stamp.sec * 1e9 + bbox_stamp.nanosec) - (stamp.sec * 1e9 + stamp.nanosec))
+    # instances_to_save.append([(category_name, x, y, z), time, (bb.x, bb.y, bb.width, bb.height, image)])
 
-                        # If the current image's timestamp is closer to the target timestamp, update the closest image
-                        if stamp_diff < closest_stamp_diff:
-                            closest_stamp_diff = stamp_diff
-                            closest_image = image
-                            
-                    image = closest_image
-                    #self.save_instances((category_name, x, y, z), time, (bb.x, bb.y, bb.width, bb.height, image))
-                    instances_to_save.append([(category_name, x, y, z), time, (bb.x, bb.y, bb.width, bb.height, image)])
-    
-                self.save_instances(instances_to_save)
-
-
-    def save_instances(self, list_instances):
+    def save_instances(self, list_instances: List[Instance]):
         new_instance_key = 0
 
         self.get_logger().info("# of instances detected in batch: {}".format(len(list_instances)))
 
         for instance in list_instances:
             
-            new_instance = instance[0]
-            
             if self.reduce_categories:
-                new_instance_name = self.reduce_category(new_instance[0])
-                new_instance = (new_instance_name, new_instance[1], new_instance[2], new_instance[3])
-                self.get_logger().info("Reduced category: {}".format(new_instance[0]))
+                new_instance_name = self.reduce_category(instance.category_name)
+                new_instance = (new_instance_name, instance.position[0], instance.position[1], instance.position[2])
+                self.get_logger().info("Reduced category: {}".format(instance.category_name))
 
-            
-            time = instance[1]
-            bb_info = instance[2]
+            time = instance.stamp
+            bb_info = (*instance.bbox, instance.image)
 
-            # convert coordinates to map frame
-            point_map = PointStamped()
-            try:
-                point_map = self.instance_to_point_map(new_instance, time)
-            except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException) as e:
-                self.get_logger().logwarn(e)
-                return   
+            # -- convert object position from local frame to map frame --
+            point_map: PointStamped = self.instance_to_point_map(new_instance[1], new_instance[2], new_instance[3], time)
             
-            print("point after tf:", point_map)
-            
-            # test if there is already an instance of that category in the list
-            instances = [item for item in self.objects_dict if new_instance[0] in item]
-            nb_instances = len(instances)
+            if point_map is None: # i.e. transformation failed
+                return
 
-            if nb_instances == 0:
+            # -- retrieve all objects in our database that have the same label as the currently examined observation --
+            instances_matched_by_category = [item for item in self.objects_dict if instance.category_name == item[0]]
+            nb_instances_matched_by_category = len(instances_matched_by_category)
+
+            # -- if no object of the same label is found in the database --
+            if nb_instances_matched_by_category == 0:
                 
                 # Is there an object instance closer than 5cm to the new instance ?
-                found_close, old_instance_key = self.found_close(list(self.objects_dict.keys()), point_map, 0.05, self.objects_dict)
-                new_instance_key = new_instance[0]+str(1)
+                found_close, old_instance_key = self.found_close(list(self.objects_dict.keys()), \
+                                                            point_map, self.OBJECT_NEAR_THRESHOLD, self.objects_dict)
+                new_instance_key = instance.category_name+str(1)
 
+                # -- this is a new one, add it to database -- 
                 if not found_close:
-                    # add instance to dict 
-                    self.objects_dict[new_instance_key] = (new_instance[0], point_map.point.x, point_map.point.y, point_map.point.z, 1, self.id)  
+                    self.objects_dict[new_instance_key] = (instance.category_name, point_map.point.x, point_map.point.y, point_map.point.z, 1, self.id)  
                     self.id += 1 
-                    # notify if new object detected
+
                     self.get_logger().info("Save inst. New object detected: {}. Position in map: {}".format(new_instance_key, point_map.point))
                     
                     message = String()
                     message.data = "New object detected: " + str(new_instance_key)
                     
                     self.speaker_pub.publish(message)
-                    self.save_instance_image(new_instance_key, bb_info)
-                   
-                    # publish tf
-                    self.publish_tf(new_instance_key, point_map)
-
-
+                    # self.save_instance_image(new_instance_key, bb_info)
+                    
+                # -- an object in database has been found to be close to the new one (but with different category) --
                 else:
                     # Goal: keep only one in the long term memory. Keep the one with the largest number of detections
-                    temp_instances = [item for item in self.temp_dict if new_instance[0] in item]
                     
+                    # -- NOTE: tempt_dict stores all new observations that had no matched item in database using (1) category name (2) distance to objects --
+                    
+                    # -- below, we check if the new observation is a repeated observation of any of the temporary instances --
+                    
+                    # -- fist, filter all tempopary instances based on category name --
+                    temp_instances = [item for item in self.temp_dict if instance.category_name == item[0]]
+                    
+                    # -- there is at least 1 matched item in the temporary instance list --
                     if len(temp_instances) > 0:
-                        
-                        # check if there is a close instance in the temp memory
-                        found_close, tmp_old_instance_key = self.found_close(temp_instances, point_map, 0.05, self.temp_dict)
+                        # -- second, check if there is a close instance in the temp memory with the same category name --
+                        found_close, tmp_old_instance_key = self.found_close(temp_instances, point_map, self.OBJECT_NEAR_THRESHOLD, self.temp_dict)
 
+                        # -- indeed this new observation is a repeated observation of a temporary instance, so we update it --
                         if found_close:
                             instance_temp = self.temp_dict[tmp_old_instance_key]
-                            self.temp_dict[tmp_old_instance_key] = (instance_temp[0], (point_map.point.x +float(instance_temp[1]))/2, (point_map.point.y +float(instance_temp[2]))/2, (point_map.point.z +float(instance_temp[3]))/2, int(instance_temp[4])+1) 
+                            
+                            # -- NOTE: we update both the position AND the detection counter --
+                            # -- [category_name, x, y, z, nb_detections] --
+                            self.temp_dict[tmp_old_instance_key] = (instance_temp[0], (point_map.point.x +float(instance_temp[1]))/2,\
+                                (point_map.point.y +float(instance_temp[2]))/2, (point_map.point.z +float(instance_temp[3]))/2, int(instance_temp[4])+1) 
                             new_instance_key = tmp_old_instance_key
-                               
-
+                    # -- there is at no matched item in the temporary instance list, so initiate a new temporary instance --
                     else:
-                        self.temp_dict[new_instance_key] = (new_instance[0], point_map.point.x, point_map.point.y, point_map.point.z, 1)
+                        self.temp_dict[new_instance_key] = (instance.category_name, point_map.point.x, point_map.point.y, point_map.point.z, 1)
 
                     # compare temp and long term memory 
+                    # -- update the matched object by distance in database if the new observation has more detections than the old one --
+                    # -- NOTE: self.objects_dict[old_instance_key] is the closest object in the database to the new observation (though different label) --
                     if self.objects_dict[old_instance_key][4] <= self.temp_dict[new_instance_key][4]:
                         old_id = self.objects_dict[old_instance_key][5]
                         del self.objects_dict[old_instance_key]
+                        
+                        # -- old object is updated here --
                         self.objects_dict[new_instance_key] = (self.temp_dict[new_instance_key][0], self.temp_dict[new_instance_key][1],self.temp_dict[new_instance_key][2], self.temp_dict[new_instance_key][3], self.temp_dict[new_instance_key][4], old_id)
                         del self.temp_dict[new_instance_key]
-
-                        # notify if new object detected
+                        
                         self.get_logger().info("New object detected: {}. Position in map: {}".format(new_instance_key, point_map.point))
 
                         message = String()
                         message.data = "New object detected: " + str(new_instance_key)
                         
                         self.speaker_pub.publish(message)
-                        self.save_instance_image(new_instance_key, bb_info)
-
-                        # publish tf
-                        self.publish_tf(new_instance_key, point_map)
+                        # self.save_instance_image(new_instance_key, bb_info)
                     
                         # delete other image
                         old_instance_path = self.directory+"/"+old_instance_key+".jpg"
                         if os.path.exists(old_instance_path):
                             os.remove(old_instance_path)
-
             else:
-                
-               
-                # Is the old instance closer than 30cm to the new one ?
-                found_close, old_instance_key = self.found_close(instances, point_map, 0.3, self.objects_dict)
+                # -- associate the new observation to whatever matched one that is closest and distance smaller than threshold --
+                found_close, old_instance_key = self.found_close(instances_matched_by_category, point_map, 0.3, self.objects_dict)
             
                 if found_close: 
-
-                    # update
+                    # -- update the matched object in database --
                     instance = self.objects_dict[old_instance_key]
                     point_map.point.x = (point_map.point.x +float(instance[1]))/2
                     point_map.point.y = (point_map.point.y +float(instance[2]))/2
                     point_map.point.z = (point_map.point.z +float(instance[3]))/2
-                    self.objects_dict[old_instance_key] = (new_instance[0], point_map.point.x, point_map.point.y, point_map.point.z, int(instance[4])+1, instance[5])  
-                    
-                    # publish tf
-                    self.publish_tf(old_instance_key, point_map)
-
+                    self.objects_dict[old_instance_key] = (new_instance[0], point_map.point.x, \
+                                point_map.point.y, point_map.point.z, int(instance[4])+1, instance[5])  
                 else:
-                    # add instance to dict 
-                    instance_key = new_instance[0]+str(nb_instances+1)
+                    # -- add new instance to dict --
+                    instance_key = new_instance[0]+str(nb_instances_matched_by_category+1)
                     self.objects_dict[instance_key] = (new_instance[0], point_map.point.x, point_map.point.y, point_map.point.z, 1, self.id)  
                     self.id += 1
-
-                    # notify if new object detected
+                    
                     self.get_logger().info("New object detected: {}. Position in map: {}".format(new_instance_key, point_map.point))
 
                     message = String()
                     message.data = "New object detected: " + str(new_instance_key)
                     
                     self.speaker_pub.publish(message)
-                    self.save_instance_image(instance_key, bb_info)
-
-                    # publish tf
-                    self.publish_tf(instance_key, point_map)
+                    # self.save_instance_image(instance_key, bb_info)
 
 
-    def found_close(self, instances, point_map, threshold, dictionnary):
-        
+    def found_close(self, instance_keys, point_map, threshold, dictionnary):
+        # -- use the closest instance to the new one that is also smaller than the threshold as the match --
         found_close = 0
         instance_key = None
-        for old_instance_key in instances:
-            instance = dictionnary[old_instance_key]
+        min_dist = 1e10
+        for key in instance_keys:
+            instance = dictionnary[key]
             
             dist = math.sqrt((point_map.point.x - float(instance[1]))**2 + (point_map.point.y - float(instance[2]))**2 + (point_map.point.z - float(instance[3]))**2 )
             if dist < threshold: 
                 found_close = 1
-                instance_key = old_instance_key
-                break
-
+                
+                if dist < min_dist:
+                    min_dist = dist
+                    instance_key = key
+                
         return found_close, instance_key
 
 
     def save_instance_image(self, instance_key, bb_info):
-        # save image of the instance
-
         image = bb_info[4]
         x_min = bb_info[0]
         y_min = bb_info[1]
@@ -352,7 +366,7 @@ class Object_postprocessor(Node):
 
     def publish_instances(self):
 
-        # Publish list of current instances on topic /detection/object_instances
+        # -- publish list of current instances on topic /detection/object_instances --
         instances_list_msg = ObjectInstanceArray()
         stamp = self.get_clock().now().to_msg()
         instances_list_msg.header.stamp = stamp
@@ -370,7 +384,6 @@ class Object_postprocessor(Node):
             instance_msg.latest_stamp = stamp
             
             instance_msg.nb_detections = min(max(int(instance[4]), 0), 255)
-            print("instance_msg:", instance_msg.nb_detections)
             
             instance_msg.id = instance[5]
             instances_list_msg.instances.append(instance_msg)
@@ -378,42 +391,33 @@ class Object_postprocessor(Node):
         self.instances_pub.publish(instances_list_msg)
 
 
-    def instance_to_point_map(self, instance, time):
+    def instance_to_point_map(self, x, y, z, time_):
 
         point_map = PointStamped()
         point_map.header.frame_id = self.frame_id
+        point_map.header.stamp = time_ 
         
-        # Extract integer and fractional part of current time which only have nanoseconds
-        integer_part = time.nanoseconds // int(1e9)
-        fractional_part = time.nanoseconds % int(1e9)
+        point_map.point = Point(x=x, y=y, z=z)
 
-        # Create a Time object
-        time_stamp = Time()
-        time_stamp.sec = integer_part
-        time_stamp.nanosec = fractional_part
+        can_transform = self.tfBuffer.can_transform("map", point_map.header.frame_id, time_)
+        if not can_transform:
+            self.get_logger().warn("Cannot transform from {} to map".format(point_map.header.frame_id))
+            return None
         
-
-        point_map.header.stamp = time_stamp 
-        print("category and point beform tf transform:", instance)
-        # Instance structure: (category_name, x, y, z) example: ("animal", 0.5, 0.5, 0.5)
-        
-        point_map.point = Point(x=instance[1], y=instance[2], z=instance[3])
-        print("!!!!point in camera frame :", point_map)
-
-        
+        s_t = time.time()
         try:
-            point_map = self.tfBuffer.transform(point_map, "map", rclpy.duration.Duration(seconds=1.0))
-
+            point_map = self.tfBuffer.transform(point_map, "map", rclpy.duration.Duration(seconds=0.001))
+            e_t = time.time()
+            self.get_logger().info("Transform suceeded and took {} seconds".format(e_t - s_t))
         except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException) as e:
-            self.get_logger().warn(e)
-            return   
+            self.get_logger().warn(str(e))
+            e_t = time.time()
+            self.get_logger().info("Transform failed and took {} seconds".format(e_t - s_t))
+            return None
         
         return point_map
     
     def publish_tf(self, instance_key, point_map): 
-        
-        # Publish new tranform to object/detected/instance_key
-
         t = TransformStamped()
         t.header.frame_id = "map"
         t.child_frame_id = "object/detected/"+instance_key
@@ -424,7 +428,6 @@ class Object_postprocessor(Node):
         t.transform.translation = Vector3(x=point_map.point.x, y=point_map.point.y, z=point_map.point.z)
         
         self.tf_broadcaster.sendTransform(t)
-        print("tf sent:", t)
         
     def bounding_boxes_callback(self, msg):
         self.bounding_boxes_buffer.append(msg)
@@ -452,23 +455,38 @@ class Object_postprocessor(Node):
     def main_loop(self):
 
         current_time = self.get_clock().now()
-        integer_part = current_time.nanoseconds // int(1e9)
-        fractional_part = current_time.nanoseconds % int(1e9)
-        start_time = integer_part - 1   # using msg received 2 seconds ago , change this to the time you want to use!
+        time_in_sec = current_time.nanoseconds / 1e9
+        start_time = time_in_sec - self.LOOK_BACK_DURATION # using msg received a while ago , change this to the time you want to use!
 
         latest_msgs = []
         for msg in self.bounding_boxes_buffer:
-            print("start_time:", start_time)
-            print("msg_time:", msg.header.stamp.sec)
+            # -- check recent data only, for efficiency --
             if msg.header.stamp.sec >= start_time:
                 latest_msgs.append(msg)
         
-        batch = self.bounding_boxes_buffer
-        if len(batch) > 0:
-            print("batch BoundingBoxArray msg number colected begin filter call:", len(batch))
-            print("latest 2 sec BoundingBoxArray msg number colected begin filter call:", len(latest_msgs))
-            self.filter(batch, current_time - rclpy.duration.Duration(seconds=1))
-            self.publish_instances()
+        batch = latest_msgs
+        self.get_logger().info("Length of batch to process: {}".format(len(batch)))
+        
+        self.bounding_boxes_buffer = latest_msgs
+        
+        if len(batch) == 0:
+            return
+        
+        s_t = time.time()
+        self.filter(batch, current_time - rclpy.duration.Duration(seconds=1))
+        e_t = time.time()
+        self.get_logger().info("Filter function took {:.5f} seconds to execute".format(e_t - s_t))
+        
+        self.publish_instances()
+        for keys in self.objects_dict:
+            instance = self.objects_dict[keys]
+            point_map = PointStamped()
+            point_map.header.frame_id = 'map'
+            point_map.header.stamp = self.get_clock().now().to_msg()
+            point_map.point.x = instance[1]
+            point_map.point.y = instance[2]
+            point_map.point.z = instance[3]
+            self.publish_tf(keys, point_map)
 
 def main():
     rclpy.init()
@@ -476,7 +494,7 @@ def main():
     try:
         while rclpy.ok():
             node.main_loop()
-            rclpy.spin_once(node, timeout_sec=0.1)
+            rclpy.spin_once(node, timeout_sec=0.05)
 
     except KeyboardInterrupt:
         pass

@@ -9,7 +9,7 @@ from tf_transformations import euler_from_quaternion
 class TrajectoryFollower(Node):
     def __init__(self):
         super().__init__('trajectory_follower')
-        self.create_timer(0.018, self.timer_callback)
+        self.create_timer(0.01, self.timer_callback)
         self.get_logger().info('Trajectory Follower has been started')
         
         self.path_sub = self.create_subscription(Path, '/path', self.path_cb, 10)
@@ -21,7 +21,7 @@ class TrajectoryFollower(Node):
         self.listener = TransformListener(self.buffer, self)
         
         self.WAY_POINT_THD = 0.215 # indicate the minimum distance that the way point should be from our robot (the radius of the effort)
-        self.GOAL_REACH_THD = 0.105 # defines the tolerance of goal reaching
+        self.GOAL_REACH_THD = 0.156 # defines the tolerance of goal reaching
         
         self.OMEGA_P = 2.9
         self.VEL_P = 3.35
@@ -30,19 +30,28 @@ class TrajectoryFollower(Node):
         
         self.x = self.y = None
         self.last_time = self.get_clock().now()
+        
+        self.failure_cnt = 0
+        self.TF_FAILURE_CNT_THRESHOLD = 100
 
     def timer_callback(self):
         self.get_logger().info('Trajectory Follower is running')
         
-        if self.path is None or self.poses is None:
+        if self.path is None or self.poses is None or self.failure_cnt > self.TF_FAILURE_CNT_THRESHOLD:
             # -- if self.poses is None, then it means we have reached the destination of the current trajectory --
             twist = Twist()
             self.cmd_vel_pub.publish(twist) 
             return
         
+        can_transform = self.buffer.can_transform('map', 'base_link', rclpy.time.Time(seconds=0), rclpy.duration.Duration(seconds=0.005))
+        if not can_transform:
+            self.failure_cnt += 1
+            return
+        self.failure_cnt = 0
+        
         try:
             transform = self.buffer.lookup_transform('map', \
-                'base_link', rclpy.time.Time(seconds=0))
+                'base_link', rclpy.time.Time(seconds=0), rclpy.duration.Duration(seconds=0.005))
             self.x = transform.transform.translation.x
             self.y = transform.transform.translation.y
             theta = euler_from_quaternion([transform.transform.rotation.x, transform.transform.rotation.y, \

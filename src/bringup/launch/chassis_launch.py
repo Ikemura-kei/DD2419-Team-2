@@ -15,7 +15,7 @@ def generate_launch_description():
     
     controller_node = Node(package='controller', executable='cartesian_controller')
     # controller_node = Node(package='controller', executable='open_loop_controller')
-    odometry_node = Node(package='odometry', executable='odometry')
+    odometry_node = Node(package='odometry', executable='odometry', output='screen')
     
     ld = LaunchDescription([motors_launch, encoders_launch, controller_node, odometry_node])
     

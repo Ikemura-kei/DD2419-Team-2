@@ -17,7 +17,7 @@ class ObjectNear(TemplateBehavior):
         # -- a dictionary containing object poses (as geometry_msgs.msg.PoseStamped), the naming format of objects follows that above --
         self.register_value('object_poses', read=True, write=False)
 
-        self.TF_TIMEOUT = rclpy.duration.Duration(seconds=0.1)
+        self.TF_TIMEOUT = rclpy.duration.Duration(seconds=0.005)
         self.NEAR_DISTANCE_THRESHOLD = 0.15 # meters
 
     def initialise(self) -> None:

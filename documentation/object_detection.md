@@ -36,7 +36,7 @@ This node implements objects classification in RGB images and publishing boundin
 
 ### 2.3 `dl_object_postprocessor`
 
-This node processes the generated bounding boxes by classifier, performs clustering, and publish a list of detected object instances. It also respensible for managing seen object instances and broadcast instance TF under the map frame.
+This node processes the generated bounding boxes (already containing 3D information) by classifier, performs clustering, and publish a list of detected object instances. It also respensible for managing seen object instances and broadcast instance TF under the map frame.
 
 #### Published Topics
 

@@ -63,7 +63,7 @@ def create_root():
     # -- LEVEL 2 --
     topics2bb = py_trees.composites.Parallel(name='topics2bb', policy=py_trees.common.ParallelPolicy.SuccessOnAll(synchronise=False))
     # TODO: define topics to subscribe here
-    object_list2bb = ptr.subscribers.ToBlackboard('object_list2bb', '/object_list',\
+    object_list2bb = ptr.subscribers.ToBlackboard('object_list2bb', '/object_list_real',\
                  ObjectPoses, 10, blackboard_variables={'object_list': 'object_list.object_list', 'objects': None}, clearing_policy=py_trees.common.ClearingPolicy.ON_INITIALISE) # make sure we clear the detection so that we can perform missing check
     box_list2bb = ptr.subscribers.ToBlackboard('box_list2bb', '/box_list',\
                  ObjectPoses, 10, blackboard_variables={'box_list': 'object_list.object_list', 'boxes': None}, clearing_policy=py_trees.common.ClearingPolicy.ON_INITIALISE) # make sure we clear the detection so that we can perform missing check
@@ -74,6 +74,7 @@ def create_root():
                  Bool, 10, blackboard_variables='is_pick_done', clearing_policy=py_trees.common.ClearingPolicy.ON_INITIALISE) # make sure we clear the detection so that we can perform missing check
     
     task = py_trees.composites.Sequence(name='task', memory=False)
+    task_fail_is_running = py_trees.decorators.FailureIsRunning(name='task_fail_is_running', child=task)
     
     # -- LEVEL 3 --
     emergency_check = EmergencyStop()
@@ -137,7 +138,7 @@ def create_root():
     topics2bb.add_children([object_list2bb, pick_done2bb, box_list2bb, proc_data, joy2bb])
 
     # -- ASSEMBLY: LEVEL 1 --
-    root.add_children([topics2bb, task])
+    root.add_children([topics2bb, task_fail_is_running])
 
     return root
 
