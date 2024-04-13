@@ -38,16 +38,21 @@ class Instance():
         self.stamp = stamp
         self.bbox = bbox
         self.image = image
+        
+class TfNode(Node):
+    def __init__(self):
+        super().__init__('tf_node')
 
 class Object_postprocessor(Node):
     def __init__(self):
         """ Put the node name here, and description of the node"""
         super().__init__('dl_object_postprocessor')
 
+        self.tf_node = TfNode()
        
         # Tf 
-        self.tfBuffer = Buffer(cache_time=rclpy.duration.Duration(seconds=10))
-        self.listener = TransformListener(self.tfBuffer,self)
+        self.tfBuffer = Buffer(cache_time=rclpy.duration.Duration(seconds=5))
+        self.listener = TransformListener(self.tfBuffer, self.tf_node, spin_thread=True)
 
         
         # Parameters

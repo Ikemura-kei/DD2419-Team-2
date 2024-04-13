@@ -14,12 +14,17 @@ from geometry_msgs.msg import PointStamped
 from sensor_msgs.msg import Joy
 from std_msgs.msg import Bool
 
+class TfNode(Node):
+    def __init__(self):
+        super().__init__('tf_node')
+
 class BTV1Node(Node):
     def __init__(self):
         super().__init__('bt_v1_node')
         
-        self.buffer = Buffer(cache_time=rclpy.duration.Duration(seconds=10))
-        self.tf_listener = TransformListener(self.buffer, self)
+        self.tf_node = TfNode()
+        self.buffer = Buffer(cache_time=rclpy.duration.Duration(seconds=11))
+        self.tf_listener = TransformListener(self.buffer, self.tf_node, spin_thread=True)
         self.goal_pub = self.create_publisher(PointStamped, '/plan_goal', 10)
         self.emergency_stop_pub = self.create_publisher(Bool, '/emergency_stop', 10)
 

@@ -24,9 +24,14 @@ class GRID_STATES:
     
     def __init__():
         pass
+    
+class TfNode(Node):
+    def __init__(self):
+        super().__init__('tf_node')
 
 class PathPlanner(Node):
-    threshold_distance = 0.16 # half of the robot's width
+    # threshold_distance = 0.16 # half of the robot's width
+    threshold_distance = 0.15
     target_x = None
     target_y = None
     completed = False
@@ -36,12 +41,13 @@ class PathPlanner(Node):
     def __init__(self):
         super().__init__('path_planner')
         self.get_logger().info('Welcome to path planner')
+        self.tf_node = TfNode()
 
         # Initialize the transform listener and assign it a buffer
-        self.tfBuffer = Buffer(cache_time=rclpy.duration.Duration(seconds=5))
+        self.tfBuffer = Buffer(cache_time=rclpy.duration.Duration(seconds=11))
 
         #transform listener fills the buffer
-        self.listener = TransformListener(self.tfBuffer, self)
+        self.listener = TransformListener(self.tfBuffer, self.tf_node, spin_thread=True)
 
         self.map_sub = self.create_subscription(OccupancyGrid, '/map', self.map_cb, 10)
 
@@ -97,8 +103,8 @@ class PathPlanner(Node):
         self.get_logger().info('Received goal: x: %f, y: %f' % (self.target_x, self.target_y))
         
     def map_cb(self, msg):
-        if len(self.map.data) > 0:
-            return
+        # if len(self.map.data) > 0:
+        #     return
         self.map = msg
         
 
@@ -115,8 +121,9 @@ class PathPlanner(Node):
         child_frame = 'base_link'
         parent_frame = 'odom'
         
-        if not self.tfBuffer.can_transform(parent_frame, child_frame, self.goal_t, rclpy.duration.Duration(seconds=0.01)):
-            self.get_logger().warn("Transform unavailable.")
+        can_trans, msg = self.tfBuffer.can_transform(parent_frame, child_frame, self.goal_t, rclpy.duration.Duration(seconds=0.05), return_debug_tuple=True)
+        if not can_trans:
+            self.get_logger().warn("Transform unavailable. {}".format(msg))
             return
         
         s_t = time.time()
@@ -128,6 +135,7 @@ class PathPlanner(Node):
         map_origin_x, map_origin_y = self.from_coordinates_to_grid_index(self.origin_x, self.origin_y)
         map_target_x, map_target_y = self.from_coordinates_to_grid_index(self.target_x, self.target_y)
         self.get_logger().info("Target: %d %d" % (map_target_x, map_target_y))
+        self.get_logger().info("Origin: %f %f, %d %d" % (self.origin_x, self.origin_y, map_origin_x, map_origin_y))
                                 
         matrix_map = np.array(self.map.data).reshape((self.map.info.height, self.map.info.width))
         
@@ -148,6 +156,9 @@ class PathPlanner(Node):
             for j in range(matrix_map.shape[1]):
                 # Check if the current cell is an obstacle
                 if matrix_map[i, j] == GRID_STATES.OCCUPIED:
+                    dist_to_goal = math.sqrt((i - map_target_x) ** 2 + (j - map_target_y) ** 2) # cells
+                    if dist_to_goal < 10:
+                        continue
                     # Iterate over neighboring cells within the threshold distance
                     for di in range(-threshold_nb_cells, threshold_nb_cells + 1):
                         for dj in range(-threshold_nb_cells, threshold_nb_cells + 1):
@@ -240,7 +251,7 @@ class PathPlanner(Node):
         """
 
         self._path.header.stamp = stamp
-        self._path.header.frame_id = 'odom'
+        self._path.header.frame_id = 'map'
 
         pose = PoseStamped()
         pose.header = self._path.header
@@ -273,8 +284,8 @@ class PathPlanner(Node):
 
         map_x, map_y = x, y
 
-        y = map_x * self.map.info.resolution + self.map.info.origin.position.x + self.map.info.resolution
-        x = map_y * self.map.info.resolution + self.map.info.origin.position.y + self.map.info.resolution
+        y = map_x * self.map.info.resolution + self.map.info.origin.position.y + self.map.info.resolution
+        x = map_y * self.map.info.resolution + self.map.info.origin.position.x + self.map.info.resolution
 
         return x, y
 

@@ -56,6 +56,9 @@ public:
 
     candidateMap = map;
 
+    rclcpp::Rate rate(0.2);
+    rate.sleep();
+
     timer = this->create_wall_timer(
         std::chrono::milliseconds(100),
         std::bind(&MapperNode::publishMap, this));
@@ -130,10 +133,14 @@ private:
 
     // -- transform the 3D points from local frame into the map frame --
     geometry_msgs::msg::TransformStamped transform;
+    geometry_msgs::msg::TransformStamped rob_loc;
     try
     {
       transform = tf_buffer_->lookupTransform(
           "map", image->header.frame_id, image->header.stamp);
+
+      rob_loc = tf_buffer_->lookupTransform(
+          "map", "base_link", image->header.stamp);
     }
     catch (const tf2::TransformException &ex)
     {
@@ -143,6 +150,8 @@ private:
     }
     // RCLCPP_INFO(
     //     this->get_logger(), "Transform success");
+    float rob_x = rob_loc.transform.translation.x;
+    float rob_y = rob_loc.transform.translation.y;
 
     std::vector<geometry_msgs::msg::Point> transformedPoints;
     uint16_t printCnt = 0;
@@ -159,6 +168,7 @@ private:
     }
 
     // -- update the candidate map with the new points --
+    std::vector<uint8_t> updateMask(map.info.width * map.info.height, 0);
     for (auto point : transformedPoints)
     {
       // -- convert the 3D point into the map frame --
@@ -172,27 +182,48 @@ private:
         {
           // RCLCPP_INFO_STREAM(this->get_logger(), "Updating the candidate map at: " << xMap << ", " << yMap << " with value: " << (int)candidateMap.data[yMap * map.info.width + xMap] + 1);
           candidateMap.data[yMap * map.info.width + xMap] += 1;
+          updateMask[yMap * map.info.width + xMap] = 1;
         }
       }
     }
 
-    // -- manual point addition for sanity check --
-    for (int i = 0; i < 20; i++)
+    // -- update the candidate map considering false detection --
+    for (uint32_t row = 0; row < map.info.height; row++)
     {
-      for (int j = 0; j < 20; j++)
+      for (uint32_t col = 0; col < map.info.width; col++)
       {
-        float xPoint = 1000 + j;
-        float yPoint = 500 + i;
-        int32_t xMap = (xPoint / 1000.0f - map.info.origin.position.x) / map.info.resolution;
-        int32_t yMap = (yPoint / 1000.0f - map.info.origin.position.y) / map.info.resolution;
-        // RCLCPP_INFO_STREAM(this->get_logger(), "Point in the map frame: " << xPoint << ", " << yPoint << ", " << xMap << ", " << yMap);
-        if (xMap >= 0 && xMap < map.info.width && yMap >= 0 && yMap < map.info.height)
-          if (candidateMap.data[yMap * map.info.width + xMap] < 255)
-            candidateMap.data[yMap * map.info.width + xMap] += 1;
+        if (updateMask[row * map.info.width + col] == 0)
+        {
+          float x = map.info.origin.position.x + col * map.info.resolution;
+          float y = map.info.origin.position.y + row * map.info.resolution;
+          float distance = sqrt(pow(x - rob_x, 2) + pow(y - rob_y, 2));
+          if (candidateMap.data[row * map.info.width + col] > 2)
+            candidateMap.data[row * map.info.width + col] -= 2;
+          else
+            candidateMap.data[row * map.info.width + col] = 0;
+        }
+        else if ((candidateMap.data[row * map.info.width + col] + 1) < 100)
+        {
+          candidateMap.data[row * map.info.width + col] += 1;
+        }
       }
     }
 
     // -- update the map with the candidate map --
+    for (uint32_t row = 0; row < map.info.height; row++)
+    {
+      for (uint32_t col = 0; col < map.info.width; col++)
+      {
+        if (candidateMap.data[row * map.info.width + col] > CONCLUDE_EXISTENCE_THRESHOLD)
+        {
+          map.data[row * map.info.width + col] = 100;
+        }
+        else if (candidateMap.data[row * map.info.width + col] == 0)
+        {
+          map.data[row * map.info.width + col] = 0;
+        }
+      }
+    }
 
     // -- publish the map and the candidate map--
   }
@@ -211,7 +242,8 @@ private:
   // -- hard-coded camera matrix for the depth camera --
   const float CAMERA_MATRIX[9] = {392.4931335449219, 0, 320.5128479003906, 0, 392.4931335449219, 236.08059692382812, 0, 0, 1};
   const float VALID_DEPTH_THRESHOLDS[2] = {50, 3500};            // in [mm]
-  const float VALID_HEIGHT_IN_CAMERA_THRESHOLDS[2] = {-520, 30}; // in [mm]
+  const float VALID_HEIGHT_IN_CAMERA_THRESHOLDS[2] = {-40, 58.5}; // in [mm]
+  uint32_t CONCLUDE_EXISTENCE_THRESHOLD = 35;
 
   nav_msgs::msg::OccupancyGrid map;
   nav_msgs::msg::OccupancyGrid candidateMap;

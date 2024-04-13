@@ -21,8 +21,7 @@ def generate_launch_description():
         bringup_pkg_dir, 'launch', 'chassis_launch.py')))
     
     # -- launch mapping module --
-    mapping_launch = IncludeLaunchDescription(PythonLaunchDescriptionSource(os.path.join(\
-        mapping_pkg_dir, 'launch', 'naive_mapping_launch.py')))
+    mapper_node = Node(package='mapper', executable='mapper_node')
     
     # -- launch joy stick, for emergency control --
     joystick_launch = IncludeLaunchDescription(PythonLaunchDescriptionSource(os.path.join(\
@@ -46,7 +45,7 @@ def generate_launch_description():
     object_tracker_node = Node(package='object_tracker', executable='object_tracker_node')
     
     ld = LaunchDescription([sensors_launch, chassis_launch, joystick_launch, decision_tree_debugger_node, map_2_odom, \
-        # mapping_launch, 
+        mapper_node, 
         path_planner_node, 
         trajectory_follower_node, 
         decision_tree_node, 

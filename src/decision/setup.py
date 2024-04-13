@@ -29,6 +29,7 @@ setup(
             'ms2_pick_and_place_node = decision.ms2_pick_and_place_node:main',
             'bt_v1_node = decision.bt_v1_node:main',
             'bt_v1_debugger = decision.bt_v1_debugger:main',
+            'tf_playaround_node = decision.tf_playaround_node:main',
         ],
     },
 )

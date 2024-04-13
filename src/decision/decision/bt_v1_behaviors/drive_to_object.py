@@ -58,8 +58,8 @@ class DriveToObject(TemplateBehavior):
         goal = PointStamped()
         goal.header.frame_id = 'base_link'
         goal.header.stamp = pose_map.header.stamp
-        goal.point.x = pose_base.position.x
-        goal.point.y = pose_base.position.y
+        goal.point.x = pose_base.position.x - 0.175
+        goal.point.y = pose_base.position.y - 0.02
         # goal.point.x = pose_map.pose.position.x
         # goal.point.y = pose_map.pose.position.y
         self.node.goal_pub.publish(goal)
