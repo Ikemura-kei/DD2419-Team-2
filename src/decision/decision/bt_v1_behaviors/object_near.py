@@ -18,7 +18,7 @@ class ObjectNear(TemplateBehavior):
         self.register_value('object_poses', read=True, write=False)
 
         self.TF_TIMEOUT = rclpy.duration.Duration(seconds=0.005)
-        self.NEAR_DISTANCE_THRESHOLD = 0.15 # meters
+        self.NEAR_DISTANCE_THRESHOLD = 0.05 # meters
 
     def initialise(self) -> None:
         return super().initialise()

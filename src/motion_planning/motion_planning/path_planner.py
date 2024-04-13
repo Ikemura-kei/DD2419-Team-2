@@ -15,6 +15,8 @@ from rclpy.node import Node
 import math
 import numpy as np
 
+import time
+
 class GRID_STATES:
     EMPTY = 0
     BORDER = -100
@@ -71,7 +73,7 @@ class PathPlanner(Node):
         self._point_pub.publish(pointStamped) 
 
     def goal_cb(self, msg:PointStamped):
-        can_transform = self.tfBuffer.can_transform('odom', msg.header.frame_id, msg.header.stamp, rclpy.duration.Duration(seconds=0.05))
+        can_transform = self.tfBuffer.can_transform('odom', msg.header.frame_id, msg.header.stamp, rclpy.duration.Duration(seconds=0.01))
         if not can_transform:
             return
         
@@ -113,10 +115,13 @@ class PathPlanner(Node):
         child_frame = 'base_link'
         parent_frame = 'odom'
         
-        if not self.tfBuffer.can_transform(parent_frame, child_frame, self.goal_t):
+        if not self.tfBuffer.can_transform(parent_frame, child_frame, self.goal_t, rclpy.duration.Duration(seconds=0.01)):
+            self.get_logger().warn("Transform unavailable.")
             return
-            
-        transform = self.tfBuffer.lookup_transform(parent_frame, child_frame, self.goal_t)
+        
+        s_t = time.time()
+        
+        transform = self.tfBuffer.lookup_transform(parent_frame, child_frame, self.goal_t, rclpy.duration.Duration(seconds=0.05))
         self.origin_x = transform.transform.translation.x
         self.origin_y = transform.transform.translation.y
 
@@ -220,6 +225,9 @@ class PathPlanner(Node):
         self._poses_pub.publish(pose_array)
         self.target_x = self.target_y = None
         self._path = Path()
+        
+        e_t = time.time()
+        self.get_logger().info("Elapsed time: {:.5f}".format(e_t - s_t))
 
     def publish_path(self, stamp, x, y, yaw):
         """Takes a 2D pose appends it to the path and publishes the whole path.

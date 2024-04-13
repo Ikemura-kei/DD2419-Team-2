@@ -46,8 +46,10 @@ def generate_launch_description():
     object_tracker_node = Node(package='object_tracker', executable='object_tracker_node')
     
     ld = LaunchDescription([sensors_launch, chassis_launch, joystick_launch, decision_tree_debugger_node, map_2_odom, \
-        mapping_launch, path_planner_node, trajectory_follower_node, 
-        # decision_tree_node, 
+        # mapping_launch, 
+        path_planner_node, 
+        trajectory_follower_node, 
+        decision_tree_node, 
         dl_classifier_node,
         dl_post_processor_node,
         object_tracker_node])
