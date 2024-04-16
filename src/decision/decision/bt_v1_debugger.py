@@ -9,8 +9,8 @@ from sensor_msgs.msg import Joy
 class BTV1Debugger(Node):
     OBJECTS = ['cube:green_0', 'cube:green_1', 'cube:blue_0', 'doll:jacob_0', 'sphere:red_0']
     OBJECT_POSES = [[1.0, 1.0, 0.0], [2.5, 0.0, 0.0], [1.5, -1.0, 0.0], [2.0, 1.0, 0.0], [-1.0, 0.0, 0.0]] # x, y, theta
-    BOXES = ['cube:green_0', 'cube:blue_0', 'doll:jacob_0', 'sphere:red_0', 'cube:green_1', 'doll:chris_0']
-    BOX_POSES = [[2.0, 1.0, 0.0], [2.75, -1.0, 0.0], [-2.0, 0.5, 0.0], [1.0, 1.5, 0.0], [-2.0, 1.0, 0.0], [-2.2, 1.76, 0.0]] # x, y, theta
+    BOXES = ['Hugo_Hugo1', 'Oakie_Oakie1', 'Binky_Binky1', 'sphere:red_0', 'cube:green_1', 'doll:chris_0']
+    BOX_POSES = [[2.0, 0.8, 0.0], [2.55, -0.5, 0.0], [-1.0, 0.5, 0.0], [1.0, 1.5, 0.0], [-2.0, 1.0, 0.0], [-2.2, 1.76, 0.0]] # x, y, theta
 
     def __init__(self):
         super().__init__('bt_v1_debugger')

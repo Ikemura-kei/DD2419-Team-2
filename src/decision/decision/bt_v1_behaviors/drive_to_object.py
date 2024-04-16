@@ -7,6 +7,7 @@ from tf2_ros import TransformException
 from tf2_geometry_msgs.tf2_geometry_msgs import do_transform_pose
 import rclpy
 import numpy as np 
+from copy import deepcopy
 
 class DriveToObject(TemplateBehavior):
     def __init__(self, name="drive_to_object"):
@@ -19,9 +20,12 @@ class DriveToObject(TemplateBehavior):
         self.TF_TIMEOUT = rclpy.duration.Duration(seconds=0.05)
         self.TARGET_DIFF_THRESHOLD = 0.02 # meters
         self.last_pose = None
+        self.last_cmd_pub_time = None
+        self.CMD_PUB_PERIOD = 0.205 # seconds
         
     def initialise(self) -> None:
         self.last_pose = None
+        self.last_cmd_pub_time = self.node.get_clock().now()
         return super().initialise()
     
     def terminate(self, new_status: Status) -> None:
@@ -35,21 +39,24 @@ class DriveToObject(TemplateBehavior):
         except:
             return py_trees.common.Status.RUNNING
         
-        pose_map:PoseStamped = object_poses[target_object]
+        pose_map:PoseStamped = deepcopy(object_poses[target_object])
         
-        do_send_command = True
-        if self.last_pose is not None:
-            diff_in_pose = np.sqrt((self.last_pose.position.x - pose_map.pose.position.x)**2 \
-                + (self.last_pose.position.y - pose_map.pose.position.y)**2)
-            if diff_in_pose < self.TARGET_DIFF_THRESHOLD:
-                do_send_command = False
+        do_send_command = False
+        if self.last_cmd_pub_time is not None:
+            dt = (self.node.get_clock().now() - self.last_cmd_pub_time).nanoseconds / 1e9
+            if dt > self.CMD_PUB_PERIOD:
+                do_send_command = True
+                
+        pose_map.pose.position.x = pose_map.pose.position.x - 0.14
+        # pose_map.pose.position.x = -2.0
+        pose_map.pose.position.y = pose_map.pose.position.y - 0.07
         
         if not do_send_command:
             return py_trees.common.Status.RUNNING
         
         try:
             transform = self.node.buffer.lookup_transform('base_link', \
-                pose_map.header.frame_id, pose_map.header.stamp, self.TF_TIMEOUT)
+                pose_map.header.frame_id, rclpy.time.Time(), self.TF_TIMEOUT)
         except TransformException as e:
             return py_trees.common.Status.RUNNING
         
@@ -57,12 +64,11 @@ class DriveToObject(TemplateBehavior):
 
         goal = PointStamped()
         goal.header.frame_id = 'base_link'
-        goal.header.stamp = pose_map.header.stamp
-        goal.point.x = pose_base.position.x - 0.175
-        goal.point.y = pose_base.position.y - 0.02
-        # goal.point.x = pose_map.pose.position.x
-        # goal.point.y = pose_map.pose.position.y
+        goal.header.stamp = self.node.get_clock().now().to_msg()
+        goal.point.x = pose_base.position.x
+        goal.point.y = pose_base.position.y
         self.node.goal_pub.publish(goal)
+        self.last_cmd_pub_time = self.node.get_clock().now()
         
         self.last_pose = pose_map.pose
 

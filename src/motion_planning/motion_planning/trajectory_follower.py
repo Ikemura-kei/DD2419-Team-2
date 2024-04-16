@@ -23,11 +23,13 @@ class TrajectoryFollower(Node):
         self.buffer = Buffer()
         self.listener = TransformListener(self.buffer, self)
         
-        self.WAY_POINT_THD = 0.22 # indicate the minimum distance that the way point should be from our robot (the radius of the effort)
-        self.GOAL_REACH_THD = 0.035 # defines the tolerance of goal reaching
+        self.WAY_POINT_THD = 0.215 # indicate the minimum distance that the way point should be from our robot (the radius of the effort)
+        self.GOAL_REACH_THD = 0.07 # defines the tolerance of goal reaching
         
         self.OMEGA_P = 2.5
         self.VEL_P = 3.95
+        # self.OMEGA_P = 1.0
+        # self.VEL_P = 0.95
         self.ANGLE_DIFF_THD = 55 / 180 * np.pi
         self.DRIVE_FAST_ANGLE_DIFF_THD = 20 / 180 * np.pi
         
@@ -39,8 +41,11 @@ class TrajectoryFollower(Node):
         self.SMALL_ANGLE_SPEED_UP_FACTOR = 1.3
         self.UPPER_ANGLE_DIFF_THD = 125 / 180 * np.pi
         self.ANGLE_TOO_LARGE_SLOW_DONW_FACTOR = 0.75
-        self.DISTANCE_SHORT_THRESHOLD = self.GOAL_REACH_THD + 0.05
+        self.DISTANCE_SHORT_THRESHOLD = self.GOAL_REACH_THD + 0.03
         self.NEAR_GOAL_BOOTS = 0.39
+        self.last_angle_sign = 1
+        self.ANGLE_BOUNDARY_THRESHOLD = 3.0 * np.pi / 180.0
+        self.ANGLE_DRAMATIC_CHANGE_THRESHOLD = 100 * np.pi / 180.0
         
         self.poses = None
 
@@ -142,6 +147,13 @@ class TrajectoryFollower(Node):
         
         # -- now we compute the motion command to move toward the target way point --
         angle = np.arctan2(target[1]-self.y, target[0]-self.x) - theta
+        # -- wrap the angle into -pi and pi range --
+        # angle = np.mod(angle+np.pi,np.pi)-np.pi
+        # -- take care of potential boundary oscillation (i.e. near pi/-pi) --
+        # if np.pi - np.abs(angle) <= self.ANGLE_BOUNDARY_THRESHOLD:
+        #     angle = (np.pi - self.ANGLE_BOUNDARY_THRESHOLD) * self.last_angle_sign
+        # self.last_angle_sign = -1 if angle < 0 else 1
+        self.get_logger().info("Angle difference in map {}, my angle {}, final result {}".format(np.arctan2(target[1]-self.y, target[0]-self.x), theta, angle))
         distance = dists[index]
         
         angle = 0.0 if distance < self.DISTANCE_SHORT_THRESHOLD else angle # if the distance is too short, we just go straight
@@ -155,6 +167,7 @@ class TrajectoryFollower(Node):
         twist = Twist()
         twist.angular.z = omega
         twist.linear.x = vel
+        self.get_logger().info("Command vel {} omega {}".format(vel, omega))
         self.cmd_vel_pub.publish(twist) 
         
     def path_cb(self, msg:Path):

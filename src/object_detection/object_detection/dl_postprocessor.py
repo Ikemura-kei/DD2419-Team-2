@@ -120,8 +120,8 @@ class Object_postprocessor(Node):
         self.LOOK_BACK_DURATION = 2.0 # [s]
         self.OBJECT_NEAR_THRESHOLD = 0.05 # [m]
         self.OBJ_HEIGHT_THRESHOLD = 0.0425 # [m]
+        self.DET_CNT_THRESHOLD = 15
         
-
     def filter(self, batch, time):
         nb_msgs = len(batch)
         if nb_msgs == 0:
@@ -212,7 +212,7 @@ class Object_postprocessor(Node):
             
             if self.reduce_categories:
                 new_instance_name = self.reduce_category(instance.category_name)
-                new_instance = (new_instance_name, instance.position[0], instance.position[1], instance.position[2])
+                new_instance = (instance.category_name, instance.position[0], instance.position[1], instance.position[2])
                 self.get_logger().info("Reduced category: {}".format(instance.category_name))
 
             time = instance.stamp
@@ -225,9 +225,9 @@ class Object_postprocessor(Node):
                 return
 
             # -- retrieve all objects in our database that have the same label as the currently examined observation --
-            instances_matched_by_category = [item for item in self.objects_dict if instance.category_name == item[0]]
+            instances_matched_by_category = [item for item in self.objects_dict if instance.category_name == self.objects_dict[item][0]]
             nb_instances_matched_by_category = len(instances_matched_by_category)
-
+            self.get_logger().info("Number of matched items {}".format(nb_instances_matched_by_category))
             # -- if no object of the same label is found in the database --
             if nb_instances_matched_by_category == 0:
                 
@@ -258,7 +258,7 @@ class Object_postprocessor(Node):
                     # -- below, we check if the new observation is a repeated observation of any of the temporary instances --
                     
                     # -- fist, filter all tempopary instances based on category name --
-                    temp_instances = [item for item in self.temp_dict if instance.category_name == item[0]]
+                    temp_instances = [item for item in self.temp_dict if instance.category_name == self.temp_dict[item][0]]
                     
                     # -- there is at least 1 matched item in the temporary instance list --
                     if len(temp_instances) > 0:
@@ -278,7 +278,6 @@ class Object_postprocessor(Node):
                     else:
                         self.temp_dict[new_instance_key] = (instance.category_name, point_map.point.x, point_map.point.y, point_map.point.z, 1)
 
-                    # compare temp and long term memory 
                     # -- update the matched object by distance in database if the new observation has more detections than the old one --
                     # -- NOTE: self.objects_dict[old_instance_key] is the closest object in the database to the new observation (though different label) --
                     if self.objects_dict[old_instance_key][4] <= self.temp_dict[new_instance_key][4]:
@@ -295,9 +294,7 @@ class Object_postprocessor(Node):
                         message.data = "New object detected: " + str(new_instance_key)
                         
                         self.speaker_pub.publish(message)
-                        # self.save_instance_image(new_instance_key, bb_info)
-                    
-                        # delete other image
+
                         old_instance_path = self.directory+"/"+old_instance_key+".jpg"
                         if os.path.exists(old_instance_path):
                             os.remove(old_instance_path)
@@ -378,6 +375,8 @@ class Object_postprocessor(Node):
         instances_list_msg.header.frame_id = "map"
         for instance_key in self.objects_dict:
             instance = self.objects_dict[instance_key]
+            if instance[4] <= self.DET_CNT_THRESHOLD:
+                continue
             instance_msg = ObjectInstance()
             instance_msg.category_name = instance[0]
             instance_msg.instance_name = instance_key
@@ -411,9 +410,11 @@ class Object_postprocessor(Node):
         
         s_t = time.time()
         try:
+            self.get_logger().info("Point before transform {}".format(point_map))
             point_map = self.tfBuffer.transform(point_map, "map", rclpy.duration.Duration(seconds=0.001))
             e_t = time.time()
             self.get_logger().info("Transform suceeded and took {} seconds".format(e_t - s_t))
+            self.get_logger().info("Point after transform {}".format(point_map))
         except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException) as e:
             self.get_logger().warn(str(e))
             e_t = time.time()
@@ -474,6 +475,20 @@ class Object_postprocessor(Node):
         
         self.bounding_boxes_buffer = latest_msgs
         
+        self.publish_instances()
+        self.get_logger().info(str(self.objects_dict))
+        for keys in self.objects_dict:
+            instance = self.objects_dict[keys]
+            if instance[4] <= self.DET_CNT_THRESHOLD:
+                continue
+            point_map = PointStamped()
+            point_map.header.frame_id = 'map'
+            point_map.header.stamp = self.get_clock().now().to_msg()
+            point_map.point.x = instance[1]
+            point_map.point.y = instance[2]
+            point_map.point.z = instance[3]
+            self.publish_tf(keys, point_map)
+        
         if len(batch) == 0:
             return
         
@@ -482,16 +497,6 @@ class Object_postprocessor(Node):
         e_t = time.time()
         self.get_logger().info("Filter function took {:.5f} seconds to execute".format(e_t - s_t))
         
-        self.publish_instances()
-        for keys in self.objects_dict:
-            instance = self.objects_dict[keys]
-            point_map = PointStamped()
-            point_map.header.frame_id = 'map'
-            point_map.header.stamp = self.get_clock().now().to_msg()
-            point_map.point.x = instance[1]
-            point_map.point.y = instance[2]
-            point_map.point.z = instance[3]
-            self.publish_tf(keys, point_map)
 
 def main():
     rclpy.init()

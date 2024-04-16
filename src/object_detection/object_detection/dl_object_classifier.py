@@ -32,13 +32,13 @@ class Object_classifier(Node):
             self.device = "cpu"  # Fallback to CPU if CUDA is not available
 
         detector = Detector()
-        model_path = "/home/team2/dd2419_ws/src/object_detection/object_detection/dl_detection_model_weights/det_2023-03-31_10-42-53-672891.pt" #for robot
+        model_path = "/home/team2/DD2419-Team-2/src/object_detection/object_detection/dl_detection_model_weights/det_2023-03-31_10-42-53-672891.pt" #for robot
         example_forward_input = torch.rand(8, 3, 640, 480)
         self.model = self.load_model(detector, model_path, self.device)
         self.model_opt = torch.jit.trace(self.model, example_forward_input).to(self.device)
         self.model_opt.eval()
         
-
+        self.DIRECTORY_OF_DATASET = "/home/team2/DD2419-Team-2/src/object_detection/object_detection/data_set"
 
         self.bridge = CvBridge()
 
@@ -86,14 +86,25 @@ class Object_classifier(Node):
             cv_image = self.bridge.imgmsg_to_cv2(msg, "rgb8")
 
             print('Image received')
+            self.save_image_for_dataset(cv_image)
+            
             if self.depth is not None:
                 self.compute_bb(msg.header.stamp, msg.header.frame_id, self.depth, cv_image, t0) 
-
+                
         except CvBridgeError as e:
             print(e)
             
+    def save_image_for_dataset(self, image):
+        counter = 0
 
-
+        try:
+            if counter%50 == 0:
+                path = self.DIRECTORY_OF_DATASET+"/"+str(counter)+".jpg"
+                # cv2.imwrite(path, image)
+            counter += 1
+        except CvBridgeError as e:
+            print(e)
+            
     def depth_image_callback(self, msg): 
         """Callback function for the topic"""
         try:

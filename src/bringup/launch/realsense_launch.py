@@ -18,4 +18,8 @@ def generate_launch_description():
     
     baselink_2_color_tf = Node(executable='static_transform_publisher', package='tf2_ros', arguments=['--child-frame-id', 'camera_color_optical_frame', '--frame-id', 'camera_link'])
     
-    return LaunchDescription([realsense_launch, baselink_2_realsense_tf, baselink_2_depth_tf, baselink_2_color_tf])
+    return LaunchDescription([realsense_launch,
+                              baselink_2_realsense_tf, 
+                            #   baselink_2_depth_tf, 
+                            #   baselink_2_color_tf
+                              ])

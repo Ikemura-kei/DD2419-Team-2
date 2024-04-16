@@ -22,6 +22,8 @@ setup(
         'console_scripts': [
             'path_planner = motion_planning.path_planner:main',
             'trajectory_follower = motion_planning.trajectory_follower:main',
+            'path_planner_optimized = motion_planning.path_planner_optimized:main',
+            'path_planner_tester = motion_planning.path_planner_tester:main',
         ],
     },
 )

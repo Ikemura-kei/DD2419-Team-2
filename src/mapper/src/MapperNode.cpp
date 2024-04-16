@@ -197,8 +197,8 @@ private:
           float x = map.info.origin.position.x + col * map.info.resolution;
           float y = map.info.origin.position.y + row * map.info.resolution;
           float distance = sqrt(pow(x - rob_x, 2) + pow(y - rob_y, 2));
-          if (candidateMap.data[row * map.info.width + col] > 2)
-            candidateMap.data[row * map.info.width + col] -= 2;
+          if (candidateMap.data[row * map.info.width + col] > 1)
+            candidateMap.data[row * map.info.width + col] -= 1;
           else
             candidateMap.data[row * map.info.width + col] = 0;
         }

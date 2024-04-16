@@ -18,7 +18,7 @@ class ObjectNear(TemplateBehavior):
         self.register_value('object_poses', read=True, write=False)
 
         self.TF_TIMEOUT = rclpy.duration.Duration(seconds=0.005)
-        self.NEAR_DISTANCE_THRESHOLD = 0.05 # meters
+        self.NEAR_DISTANCE_THRESHOLD = 0.295 # meters, should be within arm reach
 
     def initialise(self) -> None:
         return super().initialise()
@@ -35,7 +35,7 @@ class ObjectNear(TemplateBehavior):
         # -- NOTE: these pose information should be under the 'map' frame --
         try:
             transform = self.node.buffer.lookup_transform('base_link', \
-                pose_map.header.frame_id, pose_map.header.stamp, self.TF_TIMEOUT)
+                pose_map.header.frame_id, rclpy.time.Time(), self.TF_TIMEOUT)
         except TransformException as e:
             print("TransformException: ", e)
             return py_trees.common.Status.FAILURE

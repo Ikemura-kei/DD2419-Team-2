@@ -50,7 +50,7 @@ def main():
         rclpy.try_shutdown()
         sys.exit(1)
 
-    tree.tick_tock(period_ms=100.0)
+    tree.tick_tock(period_ms=80.0)
 
     try:
         rclpy.spin(tree.node)
@@ -70,7 +70,7 @@ def create_root():
     # TODO: define topics to subscribe here
     object_list2bb = ptr.subscribers.ToBlackboard('object_list2bb', '/object_list_real',\
                  ObjectPoses, 10, blackboard_variables={'object_list': 'object_list.object_list', 'objects': None}, clearing_policy=py_trees.common.ClearingPolicy.ON_INITIALISE) # make sure we clear the detection so that we can perform missing check
-    box_list2bb = ptr.subscribers.ToBlackboard('box_list2bb', '/box_list',\
+    box_list2bb = ptr.subscribers.ToBlackboard('box_list2bb', '/box_list_real',\
                  ObjectPoses, 10, blackboard_variables={'box_list': 'object_list.object_list', 'boxes': None}, clearing_policy=py_trees.common.ClearingPolicy.ON_INITIALISE) # make sure we clear the detection so that we can perform missing check
     joy2bb = ptr.subscribers.ToBlackboard('joy2bb', '/joy',\
                  Joy, 10, blackboard_variables='joy', clearing_policy=py_trees.common.ClearingPolicy.ON_INITIALISE) # make sure we clear the detection so that we can perform missing check

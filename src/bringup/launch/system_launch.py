@@ -9,7 +9,7 @@ from launch.launch_description_sources import PythonLaunchDescriptionSource
 
 def generate_launch_description():
     bringup_pkg_dir = get_package_share_directory('bringup')
-    mapping_pkg_dir = get_package_share_directory('mapping')
+    object_detection_pkg_dir = get_package_share_directory('object_detection')
     teleop_twist_joy_pkg_dir = get_package_share_directory('teleop_twist_joy')
     
     # -- launch sensors --
@@ -30,13 +30,17 @@ def generate_launch_description():
     # -- launch decision tree --
     decision_tree_node = Node(package='decision', executable='bt_v1_node', output='screen')
     
+    # -- launch box detector (aruco-based) --
+    aruco_det_launch = IncludeLaunchDescription(PythonLaunchDescriptionSource(os.path.join(\
+        object_detection_pkg_dir, 'launch', 'aruco_detector_launch.py')))
+    
     # -- launch decision tree debugger --
     decision_tree_debugger_node = Node(package='decision', executable='bt_v1_debugger')
     # dummy map->odom
     map_2_odom = Node(executable='static_transform_publisher', package='tf2_ros', arguments=['--child-frame-id', 'odom', '--frame-id', 'map'])
     
     # -- launch path planner and trajectory follower --
-    path_planner_node = Node(package='motion_planning', executable='path_planner', output='screen')
+    path_planner_node = Node(package='motion_planning', executable='path_planner_optimized', output='screen')
     trajectory_follower_node = Node(package='motion_planning', executable='trajectory_follower')
     
     # -- launch object detection stuff --
@@ -47,10 +51,12 @@ def generate_launch_description():
     ld = LaunchDescription([sensors_launch, chassis_launch, joystick_launch, decision_tree_debugger_node, map_2_odom, \
         mapper_node, 
         path_planner_node, 
-        trajectory_follower_node, 
+        # trajectory_follower_node, 
         decision_tree_node, 
         dl_classifier_node,
         dl_post_processor_node,
-        object_tracker_node])
+        object_tracker_node,
+        aruco_det_launch,
+        ])
     
     return ld
