@@ -86,7 +86,8 @@ class DisplayMarkers(Node):
             vis_markers.markers.append(self.prep_marker(marker.header, marker.id))
             
             # -- TODO: change this to be adaptive, now just for testing --
-            for name in ['Hugo_Hugo1', 'Oakie_Oakie1', 'Muddles_Muddles1', 'Blue_ball_Blue_ball1', 'Green_ball_Green_ball1', 'Binky_Binky1']:
+            for name in ['Hugo_Hugo1', 'Oakie_Oakie1', 'Muddles_Muddles1', 'Blue_ball_Blue_ball1', \
+                'Green_ball_Green_ball1', 'Binky_Binky1', 'Slush_Slush1']:
                 pose_map: PoseStamped = do_transform_pose_stamped(marker.pose, transform_to_map)
                 pose = PoseStamped()
                 pose.header.frame_id = 'map'

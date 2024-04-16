@@ -51,7 +51,7 @@ def generate_launch_description():
     ld = LaunchDescription([sensors_launch, chassis_launch, joystick_launch, decision_tree_debugger_node, map_2_odom, \
         mapper_node, 
         path_planner_node, 
-        # trajectory_follower_node, 
+        trajectory_follower_node, 
         decision_tree_node, 
         dl_classifier_node,
         dl_post_processor_node,
