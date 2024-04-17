@@ -148,7 +148,7 @@ class TrajectoryFollower(Node):
         # -- now we compute the motion command to move toward the target way point --
         angle = np.arctan2(target[1]-self.y, target[0]-self.x) - theta
         # -- wrap the angle into -pi and pi range --
-        # angle = np.mod(angle+np.pi,np.pi)-np.pi
+        angle = np.mod(angle+np.pi,2*np.pi)-np.pi
         # -- take care of potential boundary oscillation (i.e. near pi/-pi) --
         # if np.pi - np.abs(angle) <= self.ANGLE_BOUNDARY_THRESHOLD:
         #     angle = (np.pi - self.ANGLE_BOUNDARY_THRESHOLD) * self.last_angle_sign

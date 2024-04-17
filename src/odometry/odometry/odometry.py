@@ -20,9 +20,10 @@ class Odometry(Node):
     # --------------------------------
     # -- robot kinematic parameters --
     # --------------------------------
-    WHEEL_RADIUS = 9.8 * 0.01 / 2 # m
-    WHEEL_SEPARATION = 31 * 0.01 # m
-
+    # WHEEL_RADIUS = 9.8 * 0.01 / 2 # m
+    # WHEEL_SEPARATION = 31 * 0.01 # m
+    WHEEL_RADIUS = 11.0175 * 0.01 / 2 # m
+    WHEEL_SEPARATION = 36.025 * 0.01 # m
     def __init__(self):
         super().__init__('odometry')
 

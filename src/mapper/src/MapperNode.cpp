@@ -202,9 +202,9 @@ private:
           else
             candidateMap.data[row * map.info.width + col] = 0;
         }
-        else if ((candidateMap.data[row * map.info.width + col] + 1) < 100)
+        else if ((candidateMap.data[row * map.info.width + col] + 2) < 100)
         {
-          candidateMap.data[row * map.info.width + col] += 1;
+          candidateMap.data[row * map.info.width + col] += 2;
         }
       }
     }
