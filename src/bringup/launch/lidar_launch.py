@@ -67,6 +67,7 @@ def generate_launch_description():
                          'angle_compensate': angle_compensate}],
             output='screen'),
 
-      Node(package='tf2_ros', executable='static_transform_publisher', exec_name='base_link_2_laser_tf', arguments=['--child-frame-id', 'laser', '--frame-id', 'base_link'])
+      Node(package='tf2_ros', executable='static_transform_publisher', exec_name='base_link_2_laser_tf', arguments=['--child-frame-id', 'laser', '--frame-id', 'base_link', \
+           '--x', '-0.009', '--y', '0.08', '--z', '0.0'])
 
     ])

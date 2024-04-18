@@ -18,12 +18,14 @@ class BoxNear(TemplateBehavior):
         self.register_value(key="target_box", read=False, write=True)
 
         self.TF_TIMEOUT = rclpy.duration.Duration(seconds=0.015)
-        self.NEAR_DISTANCE_THRESHOLD = 0.3 # meters, has to be within the arm reach
+        self.NEAR_DISTANCE_THRESHOLD = 0.32 # meters, has to be within the arm reach
 
     def initialise(self) -> None:
         return super().initialise()
 
     def update(self):
+        # # -- for debug --
+        # return py_trees.common.Status.SUCCESS
         try:
             box_poses = self.blackboard.get('box_poses')
             target_box = self.blackboard.get('target_box')

@@ -26,7 +26,10 @@ class BTV1Node(Node):
         self.buffer = Buffer(cache_time=rclpy.duration.Duration(seconds=11))
         self.tf_listener = TransformListener(self.buffer, self.tf_node, spin_thread=True)
         self.goal_pub = self.create_publisher(PointStamped, '/plan_goal', 10)
+        self.goal_loc_pub = self.create_publisher(PointStamped, '/goal_loc', 10)
         self.emergency_stop_pub = self.create_publisher(Bool, '/emergency_stop', 10)
+        self.pick_pub = self.create_publisher(PointStamped, '/pick_ik', 10)
+        self.drop_pub = self.create_publisher(Bool, '/drop_obj', 10)
 
 def main():
     print("Hello World from bt_v1_node.py")
@@ -76,7 +79,9 @@ def create_root():
                  Joy, 10, blackboard_variables='joy', clearing_policy=py_trees.common.ClearingPolicy.ON_INITIALISE) # make sure we clear the detection so that we can perform missing check
     proc_data = ProcData()
     pick_done2bb = ptr.subscribers.ToBlackboard('pick_done2bb', '/is_pick_done',\
-                 Bool, 10, blackboard_variables='is_pick_done', clearing_policy=py_trees.common.ClearingPolicy.ON_INITIALISE) # make sure we clear the detection so that we can perform missing check
+                 Bool, 10, blackboard_variables='is_pick_done_external', clearing_policy=py_trees.common.ClearingPolicy.ON_INITIALISE) # make sure we clear the detection so that we can perform missing check
+    ik_res2bb = ptr.subscribers.ToBlackboard('pick_done2bb', '/ik_res',\
+                 Bool, 10, blackboard_variables='ik_res', clearing_policy=py_trees.common.ClearingPolicy.ON_INITIALISE) # make sure we clear the detection so that we can perform missing check
     
     task = py_trees.composites.Sequence(name='task', memory=False)
     task_fail_is_running = py_trees.decorators.FailureIsRunning(name='task_fail_is_running', child=task)
@@ -105,7 +110,7 @@ def create_root():
     drive_to_object = DriveToObject()
     object_at_hand = ObjectAtHand()
     pick_object = PickObject()
-    object_at_hand_2 = ObjectAtHand()
+    object_at_hand_2 = ObjectAtHand(always_true=True)
     get_object_back = GetObjectBackDummy()
     m_s_box_found = py_trees.composites.Selector(name='m_s_box_found', memory=False)
     m_s_box_near = py_trees.composites.Selector(name='m_s_box_near', memory=False)
@@ -113,7 +118,7 @@ def create_root():
 
     # -- LEVEL 7 --
     box_found = BoxFound()
-    wonder_around_2 = WonderAround()
+    wonder_around_2 = WonderAround(cooldown=5)
     box_near = BoxNear()
     drive_to_box = DriveToBox()
     object_in_box = ObjectInBox()
@@ -140,7 +145,7 @@ def create_root():
 
     # -- ASSEMBLY: LEVEL 2 --
     task.add_children([emergency_check, work_not_done, work])
-    topics2bb.add_children([object_list2bb, pick_done2bb, box_list2bb, proc_data, joy2bb])
+    topics2bb.add_children([object_list2bb, pick_done2bb, box_list2bb, proc_data, joy2bb, ik_res2bb])
 
     # -- ASSEMBLY: LEVEL 1 --
     root.add_children([topics2bb, task_fail_is_running])

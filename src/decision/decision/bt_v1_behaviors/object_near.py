@@ -49,3 +49,4 @@ class ObjectNear(TemplateBehavior):
             return py_trees.common.Status.SUCCESS
         else:
             return py_trees.common.Status.FAILURE
+            # return py_trees.common.Status.SUCCESS # hack

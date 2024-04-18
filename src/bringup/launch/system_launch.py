@@ -48,6 +48,11 @@ def generate_launch_description():
     dl_post_processor_node = Node(package='object_detection', executable='dl_postprocessor')
     object_tracker_node = Node(package='object_tracker', executable='object_tracker_node')
     
+    # -- launch arm controller --
+    robo_arm_ik_launch = IncludeLaunchDescription(PythonLaunchDescriptionSource(os.path.join(\
+        bringup_pkg_dir, 'launch', 'robo_arm_ik_launch.py')))
+    arm_node = Node(package='arm_controller', executable='inverse_kinematics')
+    
     ld = LaunchDescription([sensors_launch, chassis_launch, joystick_launch, decision_tree_debugger_node, map_2_odom, \
         mapper_node, 
         path_planner_node, 
@@ -57,6 +62,8 @@ def generate_launch_description():
         dl_post_processor_node,
         object_tracker_node,
         aruco_det_launch,
+        robo_arm_ik_launch,
+        arm_node,
         ])
     
     return ld

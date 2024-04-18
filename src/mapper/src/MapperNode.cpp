@@ -15,6 +15,8 @@
 #include <sensor_msgs/msg/image.hpp>
 #include <geometry_msgs/msg/point.hpp>
 #include "geometry_msgs/msg/transform_stamped.hpp"
+#include "sensor_msgs/msg/laser_scan.hpp"
+#include "sensor_msgs/msg/point_cloud2.hpp"
 
 // -- tf2 stuff --
 #include "tf2/exceptions.h"
@@ -24,6 +26,14 @@
 
 using std::placeholders::_1;
 using namespace std;
+using namespace chrono;
+
+union FloatUint8
+{
+  float floatRep;
+  uint32_t uint32Rep;
+  uint8_t uint8Rep[4];
+} floatUint8;
 
 class MapperNode : public rclcpp::Node
 {
@@ -32,8 +42,10 @@ public:
       : Node("mapper_node")
   {
     // -- create subscribers --
-    depthImageSub = this->create_subscription<sensor_msgs::msg::Image>(
-        depthTopic, 10, std::bind(&MapperNode::depthImageCb, this, _1));
+    // depthImageSub = this->create_subscription<sensor_msgs::msg::Image>(
+    //     depthTopic, 10, std::bind(&MapperNode::depthImageCb, this, _1));
+    scanSub = this->create_subscription<sensor_msgs::msg::LaserScan>(scanTopic, 10, std::bind(&MapperNode::scanCb, this, _1));
+    pntCldSub = this->create_subscription<sensor_msgs::msg::PointCloud2>(pntCldTopic, 10, std::bind(&MapperNode::pntCldCb, this, _1));
 
     // -- create publishers --
     mapPub = this->create_publisher<nav_msgs::msg::OccupancyGrid>(mapTopic, 10);
@@ -56,8 +68,8 @@ public:
 
     candidateMap = map;
 
-    rclcpp::Rate rate(0.2);
-    rate.sleep();
+    // rclcpp::Rate rate(0.2);
+    // rate.sleep();
 
     timer = this->create_wall_timer(
         std::chrono::milliseconds(100),
@@ -67,17 +79,137 @@ public:
 private:
   void publishMap()
   {
-    RCLCPP_INFO(this->get_logger(), "Publishing the map.");
+    // RCLCPP_INFO(this->get_logger(), "Publishing the map.");
     map.header.stamp = this->get_clock()->now();
     candidateMap.header.stamp = this->get_clock()->now();
     mapPub->publish(map);
     candidateMapPub->publish(candidateMap);
   }
 
+  void pntCldCb(const sensor_msgs::msg::PointCloud2::SharedPtr pntCld)
+  {
+    // RCLCPP_INFO_STREAM(this->get_logger(), "Received point cloud data.");
+    int SKIP_STEP = 7;
+
+    auto parsePntStartT = high_resolution_clock::now();
+    // -- parse points --
+    std::vector<geometry_msgs::msg::Point> points;
+    int newStep = pntCld->point_step * SKIP_STEP;
+    for (int i = 0; i < pntCld->row_step; i += newStep)
+    {
+      geometry_msgs::msg::Point point;
+
+      for (int j = 0; j < 4; j++)
+        floatUint8.uint8Rep[j] = pntCld->data[i + j + 4]; // somehow floats are little-endian
+      point.y = floatUint8.floatRep;
+
+      if (!((point.y * 1000) > VALID_HEIGHT_IN_CAMERA_THRESHOLDS[0] && (point.y * 1000) < VALID_HEIGHT_IN_CAMERA_THRESHOLDS[1]))
+      {
+        continue;
+      }
+
+      for (int j = 0; j < 4; j++)
+        floatUint8.uint8Rep[j] = pntCld->data[i + j + 8]; // somehow floats are little-endian
+      point.z = floatUint8.floatRep;
+
+      if ((point.z * 1000) < VALID_DEPTH_THRESHOLDS[0] || (point.z * 1000) > VALID_DEPTH_THRESHOLDS[1])
+      {
+        continue;
+      }
+
+      for (int j = 0; j < 4; j++)
+        floatUint8.uint8Rep[j] = pntCld->data[i + j]; // somehow floats are little-endian
+      point.x = floatUint8.floatRep;
+
+      points.push_back(point);
+    }
+
+    // -- transform points into the map frame --
+    geometry_msgs::msg::TransformStamped base2MapTransform;
+    try
+    {
+      base2MapTransform = this->tf_buffer_->lookupTransform("map", pntCld->header.frame_id, pntCld->header.stamp);
+    }
+    catch (const tf2::TransformException &ex)
+    {
+    }
+
+    std::vector<geometry_msgs::msg::Point> mapPoints;
+    for (auto point : points)
+    {
+      geometry_msgs::msg::Point outPoint;
+      tf2::doTransform(point, outPoint, base2MapTransform);
+      mapPoints.push_back(outPoint);
+    }
+    auto parsePntEndT = high_resolution_clock::now();
+
+    auto updateMapStartT = high_resolution_clock::now();
+    // -- update map accordingly --
+    updateMap(mapPoints);
+    auto updateMapEndT = high_resolution_clock::now();
+
+    auto pntProcT = duration_cast<microseconds>(parsePntEndT - parsePntStartT);
+    auto pntMapUpdateT = duration_cast<microseconds>(updateMapEndT - updateMapStartT);
+    RCLCPP_INFO_STREAM(this->get_logger(), "Point cloud processing takes: " << pntProcT.count() / 1e6 << " seconds, and map update takes: " << pntMapUpdateT.count() / 1e6 << " seconds");
+  }
+
+  void scanCb(const sensor_msgs::msg::LaserScan::SharedPtr scan)
+  {
+    auto scanProcStartT = high_resolution_clock::now();
+    // -- get points from range-bearing data --
+    std::vector<geometry_msgs::msg::Point> points;
+    float totalBearing = scan->angle_min;
+    for (int i = 0; i < scan->ranges.size(); i++)
+    {
+      float range = scan->ranges[i];
+      if (isnan(range) || isinf(range) || range < 0.45)
+      {
+        totalBearing += scan->angle_increment;
+        continue;
+      }
+
+      geometry_msgs::msg::Point point;
+      point.x = range * cos(totalBearing);
+      point.y = range * sin(totalBearing);
+      point.z = 0;
+      points.push_back(point);
+
+      totalBearing += scan->angle_increment;
+
+      // RCLCPP_INFO_STREAM(this->get_logger(), "The point computed is: " << point.x << ", " << point.y);
+    }
+
+    // -- transform the points to the map frame --
+    geometry_msgs::msg::TransformStamped base2MapTransform;
+    try
+    {
+      base2MapTransform = this->tf_buffer_->lookupTransform("map", scan->header.frame_id, scan->header.stamp);
+    }
+    catch (const tf2::TransformException &ex)
+    {
+    }
+
+    std::vector<geometry_msgs::msg::Point> mapPoints;
+    for (auto point : points)
+    {
+      geometry_msgs::msg::Point outPoint;
+      tf2::doTransform(point, outPoint, base2MapTransform);
+      mapPoints.push_back(outPoint);
+    }
+    auto scanProcEndT = high_resolution_clock::now();
+
+    auto scanMapUpdateStartT = high_resolution_clock::now();
+    // -- add to candidate map and update the map accordingly --
+    // updateMap(mapPoints, true);
+    auto scanMapUpdateEndT = high_resolution_clock::now();
+
+    auto scanProcT = duration_cast<microseconds>(scanMapUpdateEndT - scanMapUpdateStartT);
+    auto scanMapUpdateT = duration_cast<microseconds>(scanProcEndT - scanProcStartT);
+    RCLCPP_INFO_STREAM(this->get_logger(), "Scan processing takes: " << scanProcT.count() / 1e6 << " seconds, and map update takes: " << scanMapUpdateT.count() / 1e6 << " seconds");
+  }
+
   void depthImageCb(const sensor_msgs::msg::Image::SharedPtr image)
   {
-    RCLCPP_INFO(this->get_logger(), "Received a depth image.");
-
     // -- parse raw data into depth array --
     uint8_t *data = image->data.data();
     uint16_t *depth = (uint16_t *)data; // depth container, values in [mm], number of values = image->height * image->width, row major order
@@ -148,33 +280,39 @@ private:
           this->get_logger(), "Could not transform: %s", ex.what());
       return;
     }
-    // RCLCPP_INFO(
-    //     this->get_logger(), "Transform success");
+
     float rob_x = rob_loc.transform.translation.x;
     float rob_y = rob_loc.transform.translation.y;
 
     std::vector<geometry_msgs::msg::Point> transformedPoints;
-    uint16_t printCnt = 0;
     for (auto point : validPoints)
     {
       geometry_msgs::msg::Point transformedPoint;
       tf2::doTransform(point, transformedPoint, transform);
+      // -- mm to m --
+      transformedPoint.x = transformedPoint.x / 1000.0f;
+      transformedPoint.y = transformedPoint.y / 1000.0f;
       transformedPoints.push_back(transformedPoint);
-      printCnt++;
-      if (printCnt < 30)
-      {
-        // RCLCPP_INFO_STREAM(this->get_logger(), "Transformed point: " << transformedPoint.x << ", " << transformedPoint.y << ", " << transformedPoint.z);
-      }
     }
 
+    updateMap(transformedPoints);
+  }
+
+  void updateMap(std::vector<geometry_msgs::msg::Point> &points, bool isScan = false)
+  {
     // -- update the candidate map with the new points --
     std::vector<uint8_t> updateMask(map.info.width * map.info.height, 0);
-    for (auto point : transformedPoints)
+    for (auto point : points)
     {
+      if (point.y <= 0.08 && point.y >= -0.08)
+      {
+        continue;
+      }
+
       // -- convert the 3D point into the map frame --
-      int32_t xMap = (point.x / 1000.0f - map.info.origin.position.x) / map.info.resolution;
-      int32_t yMap = (point.y / 1000.0f - map.info.origin.position.y) / map.info.resolution;
-      // RCLCPP_INFO_STREAM(this->get_logger(), "Point in the map frame: " << xMap << ", " << yMap);
+      int32_t xMap = (point.x - map.info.origin.position.x) / map.info.resolution;
+      int32_t yMap = (point.y - map.info.origin.position.y) / map.info.resolution;
+
       // -- update the candidate map --
       if (xMap >= 0 && xMap < map.info.width && yMap >= 0 && yMap < map.info.height)
       {
@@ -194,17 +332,20 @@ private:
       {
         if (updateMask[row * map.info.width + col] == 0)
         {
-          float x = map.info.origin.position.x + col * map.info.resolution;
-          float y = map.info.origin.position.y + row * map.info.resolution;
-          float distance = sqrt(pow(x - rob_x, 2) + pow(y - rob_y, 2));
-          if (candidateMap.data[row * map.info.width + col] > 1)
-            candidateMap.data[row * map.info.width + col] -= 1;
-          else
-            candidateMap.data[row * map.info.width + col] = 0;
+          if (!isScan)
+          {
+            if (candidateMap.data[row * map.info.width + col] > 2)
+              candidateMap.data[row * map.info.width + col] -= 2;
+            else
+              candidateMap.data[row * map.info.width + col] = 0;
+          }
         }
-        else if ((candidateMap.data[row * map.info.width + col] + 2) < 100)
+        else if ((candidateMap.data[row * map.info.width + col] + 5) < 100)
         {
-          candidateMap.data[row * map.info.width + col] += 2;
+          if (isScan)
+            candidateMap.data[row * map.info.width + col] += 0;
+          else
+            candidateMap.data[row * map.info.width + col] += 3;
         }
       }
     }
@@ -224,8 +365,6 @@ private:
         }
       }
     }
-
-    // -- publish the map and the candidate map--
   }
 
   void computeCoordinates(uint16_t xImage, uint16_t yImage, uint16_t zCamera, float outXYZ[3])
@@ -241,7 +380,7 @@ private:
 
   // -- hard-coded camera matrix for the depth camera --
   const float CAMERA_MATRIX[9] = {392.4931335449219, 0, 320.5128479003906, 0, 392.4931335449219, 236.08059692382812, 0, 0, 1};
-  const float VALID_DEPTH_THRESHOLDS[2] = {50, 3500};            // in [mm]
+  const float VALID_DEPTH_THRESHOLDS[2] = {35, 3570};             // in [mm]
   const float VALID_HEIGHT_IN_CAMERA_THRESHOLDS[2] = {-40, 58.5}; // in [mm]
   uint32_t CONCLUDE_EXISTENCE_THRESHOLD = 35;
 
@@ -249,9 +388,13 @@ private:
   nav_msgs::msg::OccupancyGrid candidateMap;
 
   string depthTopic = "/camera/depth/image_rect_raw";
+  string scanTopic = "/scan";
   string mapTopic = "/map";
+  string pntCldTopic = "/camera/depth/color/points";
   string candidateMapTopic = "/candidate_map";
   rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr depthImageSub;
+  rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr scanSub;
+  rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr pntCldSub;
   rclcpp::Publisher<nav_msgs::msg::OccupancyGrid>::SharedPtr mapPub;
   rclcpp::Publisher<nav_msgs::msg::OccupancyGrid>::SharedPtr candidateMapPub;
   std::shared_ptr<tf2_ros::TransformListener> tf_listener_{nullptr};

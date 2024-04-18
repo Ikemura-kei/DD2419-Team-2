@@ -62,7 +62,7 @@ class Object_postprocessor(Node):
 
         self.directory = "/home/team2/dd2419_ws/src/object_detection/object_detection/saved_instances"
         self.bridge = CvBridge()
-        self.NUM_OBSERVATION_THRESHOLD = 8
+        self.NUM_OBSERVATION_THRESHOLD = 4
         self.id = 0
         
         self.declare_parameter('reduce_categories', True)  # Default value is True
@@ -117,10 +117,10 @@ class Object_postprocessor(Node):
         # Initialize the transform broadcaster
         self.tf_broadcaster = TransformBroadcaster(self)
         
-        self.LOOK_BACK_DURATION = 2.0 # [s]
+        self.LOOK_BACK_DURATION = 2.35 # [s]
         self.OBJECT_NEAR_THRESHOLD = 0.05 # [m]
         self.OBJ_HEIGHT_THRESHOLD = 0.0425 # [m]
-        self.DET_CNT_THRESHOLD = 15
+        self.DET_CNT_THRESHOLD = 10
         
     def filter(self, batch, time):
         nb_msgs = len(batch)
@@ -174,6 +174,9 @@ class Object_postprocessor(Node):
             x = np.mean(x)
             y = np.mean(y)
             z = np.mean(z)
+            if z > 0.1:
+                # z += 0.1475
+                z += 0.1165
             if y < self.OBJ_HEIGHT_THRESHOLD:
                 continue
             

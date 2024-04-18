@@ -11,7 +11,8 @@ def generate_launch_description():
     micro_ros_agent_node = Node(executable='micro_ros_agent', package='micro_ros_agent', arguments=['serial', '--dev', '/dev/ttyUSB0', '-v6'])
     
     baselink_2_armbase_tf = Node(executable='static_transform_publisher', package='tf2_ros', arguments=['--child-frame-id', 'arm_base', '--frame-id', 'base_link', '--x', '0.01187', '--y', '-0.047', '--z', '0.114'])
-    
+    # ik_node = Node(executable='inverse_kinematics', package='arm_controller')
+
     # joystick is launched in the chassis_launch file
     # joystick_launch = IncludeLaunchDescription(PythonLaunchDescriptionSource(os.path.join(teleop_twist_joy_dir, 'launch/teleop-launch.py')), launch_arguments={'joy_config': 'xbox'}.items())
     

@@ -31,8 +31,8 @@ class DriveToBox(TemplateBehavior):
             return py_trees.common.Status.RUNNING
         
         pose_map:PoseStamped = deepcopy(box_poses[target_box])
-        pose_map.pose.position.x = pose_map.pose.position.x - 0.225
-        pose_map.pose.position.y = pose_map.pose.position.y - 0.015
+        pose_map.pose.position.x = pose_map.pose.position.x - 0.125
+        pose_map.pose.position.y = pose_map.pose.position.y + 0.085
         
         do_send_command = False
         if self.last_cmd_pub_time is not None:

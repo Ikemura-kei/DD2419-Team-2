@@ -21,11 +21,13 @@ class DriveToObject(TemplateBehavior):
         self.TARGET_DIFF_THRESHOLD = 0.02 # meters
         self.last_pose = None
         self.last_cmd_pub_time = None
-        self.CMD_PUB_PERIOD = 0.205 # seconds
+        self.CMD_PUB_PERIOD = 0.185 # seconds
+        self.goal_sent = False
         
     def initialise(self) -> None:
         self.last_pose = None
         self.last_cmd_pub_time = self.node.get_clock().now()
+        self.goal_sent = False
         return super().initialise()
     
     def terminate(self, new_status: Status) -> None:
@@ -46,10 +48,11 @@ class DriveToObject(TemplateBehavior):
             dt = (self.node.get_clock().now() - self.last_cmd_pub_time).nanoseconds / 1e9
             if dt > self.CMD_PUB_PERIOD:
                 do_send_command = True
-                
-        pose_map.pose.position.x = pose_map.pose.position.x - 0.14
-        # pose_map.pose.position.x = -2.0
-        pose_map.pose.position.y = pose_map.pose.position.y - 0.07
+
+        orig_x = pose_map.pose.position.x
+        orig_y = pose_map.pose.position.y
+        pose_map.pose.position.x = pose_map.pose.position.x - 0.115
+        pose_map.pose.position.y = pose_map.pose.position.y + 0.075
         
         if not do_send_command:
             return py_trees.common.Status.RUNNING
@@ -69,6 +72,15 @@ class DriveToObject(TemplateBehavior):
         goal.point.y = pose_base.position.y
         self.node.goal_pub.publish(goal)
         self.last_cmd_pub_time = self.node.get_clock().now()
+        
+        if not self.goal_sent:
+            self.goal_sent = True
+            goal_loc = PointStamped()
+            goal_loc.header.frame_id = 'map'
+            goal_loc.header.stamp = self.node.get_clock().now().to_msg()
+            goal_loc.point.x = orig_x
+            goal_loc.point.y = orig_y
+            self.node.goal_loc_pub.publish(goal_loc)
         
         self.last_pose = pose_map.pose
 

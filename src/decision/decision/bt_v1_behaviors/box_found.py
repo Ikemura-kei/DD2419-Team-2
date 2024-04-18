@@ -30,5 +30,7 @@ class BoxFound(TemplateBehavior):
             if box_type == obj_type:
                 self.blackboard.set('target_box', box, overwrite=True)
                 return py_trees.common.Status.SUCCESS
-            
+        
+        # # -- for debug --
+        # return py_trees.common.Status.SUCCESS
         return py_trees.common.Status.FAILURE

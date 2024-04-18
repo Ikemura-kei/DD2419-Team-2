@@ -3,7 +3,7 @@ from rclpy.node import Node
 from nav_msgs.msg import Path
 import numpy as np
 from tf2_ros import Buffer, TransformListener, TransformException
-from geometry_msgs.msg import Twist
+from geometry_msgs.msg import Twist, PointStamped
 from tf_transformations import euler_from_quaternion
 from visualization_msgs.msg import Marker
 
@@ -16,6 +16,8 @@ class TrajectoryFollower(Node):
         self.path_sub = self.create_subscription(Path, '/path', self.path_cb, 10)
         self.path = None
         
+        self.goal_sub = self.create_subscription(PointStamped, '/goal_loc', self.goal_cb, 10)
+        
         self.cmd_vel_pub = self.create_publisher(Twist, '/motor_controller/twist', 10)
         
         self.way_point_marker_pub = self.create_publisher(Marker, '/way_point_marker', 10)
@@ -23,8 +25,8 @@ class TrajectoryFollower(Node):
         self.buffer = Buffer()
         self.listener = TransformListener(self.buffer, self)
         
-        self.WAY_POINT_THD = 0.215 # indicate the minimum distance that the way point should be from our robot (the radius of the effort)
-        self.GOAL_REACH_THD = 0.07 # defines the tolerance of goal reaching
+        self.WAY_POINT_THD = 0.255 # indicate the minimum distance that the way point should be from our robot (the radius of the effort)
+        self.GOAL_REACH_THD = 0.07123 # defines the tolerance of goal reaching
         
         self.OMEGA_P = 2.5
         self.VEL_P = 3.95
@@ -46,24 +48,14 @@ class TrajectoryFollower(Node):
         self.last_angle_sign = 1
         self.ANGLE_BOUNDARY_THRESHOLD = 3.0 * np.pi / 180.0
         self.ANGLE_DRAMATIC_CHANGE_THRESHOLD = 100 * np.pi / 180.0
+        self.ANGLE_SMALL_TRESHOLD = 6.8 * np.pi / 180.0
         
         self.poses = None
+        
+        self.goal_x = self.goal_y = None
 
     def timer_callback(self):
         self.get_logger().info('Trajectory Follower is running')
-        
-        if self.path is None or self.poses is None or self.failure_cnt > self.TF_FAILURE_CNT_THRESHOLD:
-            # -- if self.poses is None, then it means we have reached the destination of the current trajectory --
-            twist = Twist()
-            self.cmd_vel_pub.publish(twist) 
-            
-            self.get_logger().info("Stop.")
-            if self.poses is None:
-                self.get_logger().info("Trajectory Follower has reached the destination")
-            if self.failure_cnt > self.TF_FAILURE_CNT_THRESHOLD:
-                self.get_logger().info("Trajectory Follower has failed to get the transform too many times")
-                
-            return
         
         # -- check transformation availability, if not increment failure count, otherwise reset failure count --
         can_transform = self.buffer.can_transform('map', 'base_link', rclpy.time.Time(seconds=0), rclpy.duration.Duration(seconds=0.005))
@@ -83,6 +75,35 @@ class TrajectoryFollower(Node):
         except TransformException as e:
             self.get_logger().warn(str(e))
             return
+        
+        if self.path is None or self.poses is None or self.failure_cnt > self.TF_FAILURE_CNT_THRESHOLD:
+            twist = Twist()
+            
+            if self.goal_y is not None and self.goal_x is not None:
+                # -- execute actions to face the specified goal --
+                angle = np.arctan2(self.goal_y-self.y, self.goal_x-self.x) - theta
+                # -- wrap the angle into -pi and pi range --
+                angle = np.mod(angle+np.pi,2*np.pi)-np.pi
+                if np.abs(angle) <= np.pi / 4.0:
+                    twist.angular.z = -angle * self.OMEGA_P * 5.975
+                else:
+                    twist.angular.z = -angle * self.OMEGA_P * 1.975
+                twist.linear.x = 0.005
+                if np.abs(angle) <= self.ANGLE_SMALL_TRESHOLD:
+                    self.goal_y = self.goal_x = None
+                    
+                self.get_logger().info("Executing face to goal at {}, {}, angle: {}".format(self.goal_x, self.goal_y, angle))
+            else:
+                # -- if self.poses is None, then it means we have reached the destination of the current trajectory --
+                self.get_logger().info("Stop.")
+                if self.poses is None:
+                    self.get_logger().info("Trajectory Follower has reached the destination")
+                if self.failure_cnt > self.TF_FAILURE_CNT_THRESHOLD:
+                    self.get_logger().info("Trajectory Follower has failed to get the transform too many times")
+                    
+            self.cmd_vel_pub.publish(twist) 
+            return
+        
         
         dt = (self.get_clock().now() - self.last_time).nanoseconds / 1e9
         self.last_time = self.get_clock().now()
@@ -169,6 +190,10 @@ class TrajectoryFollower(Node):
         twist.linear.x = vel
         self.get_logger().info("Command vel {} omega {}".format(vel, omega))
         self.cmd_vel_pub.publish(twist) 
+        
+    def goal_cb(self, msg:PointStamped):
+        self.goal_x = msg.point.x
+        self.goal_y = msg.point.y
         
     def path_cb(self, msg:Path):
         self.path = msg

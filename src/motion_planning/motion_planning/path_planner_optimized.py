@@ -31,7 +31,7 @@ class TfNode(Node):
         super().__init__('tf_node')
 
 class PathPlanner(Node):
-    threshold_distance = 0.25 # at least the half of the robot's width
+    threshold_distance = 0.325 # at least the half of the robot's width
     target_x = None
     target_y = None
     completed = False
@@ -113,7 +113,7 @@ class PathPlanner(Node):
         child_frame = 'base_link'
         parent_frame = 'odom'
         
-        can_trans, msg = self.tfBuffer.can_transform(parent_frame, child_frame, self.goal_t, rclpy.duration.Duration(seconds=0.05), return_debug_tuple=True)
+        can_trans, msg = self.tfBuffer.can_transform(parent_frame, child_frame, rclpy.time.Time(), rclpy.duration.Duration(seconds=0.05), return_debug_tuple=True)
         if not can_trans:
             self.get_logger().warn("Transform unavailable. {}".format(msg))
             return
@@ -145,13 +145,6 @@ class PathPlanner(Node):
         if map_origin_x < 0 or map_origin_x >= len(matrix_map) or map_origin_y < 0 or map_origin_y >= len(matrix_map[0]):
             return None
         
-        # Good filter but conflicts with the exploration phase
-        if matrix_map[map_target_x, map_target_y] == GRID_STATES.OCCUPIED:
-            self.get_logger().info("Destination is an obstacle")
-            return None
-        elif matrix_map[map_target_x, map_target_y] == GRID_STATES.BORDER:
-            self.get_logger().info("Destination is a border")
-        
         # -- add obstacle inflation to enable safer planning --
         threshold_nb_cells = self.from_meters_to_square_nb(self.threshold_distance)
         self.get_logger().info("Inflation size in number of cells: %d" % threshold_nb_cells)
@@ -172,34 +165,67 @@ class PathPlanner(Node):
         x_end = map_target_x
         y_start = map_target_y
         y_end = map_target_y
-        if map_target_x >= 10:
-            x_start -= 10
+        IGNORE_WIDTH = 8
+        if map_target_x >= IGNORE_WIDTH:
+            x_start -= IGNORE_WIDTH
         else:
             x_start = 0
-        if map_target_x < (self.map.info.width - 10):
-            x_end += 10
+        if map_target_x < (self.map.info.width - IGNORE_WIDTH):
+            x_end += IGNORE_WIDTH
         else:
             x_end = self.map.info.width - 1
-        if map_target_y >= 10:
-            y_start -= 10
+        if map_target_y >= IGNORE_WIDTH:
+            y_start -= IGNORE_WIDTH
         else:
             y_start = 0
-        if map_target_y < (self.map.info.height - 10):
-            y_end += 10
+        if map_target_y < (self.map.info.height - IGNORE_WIDTH):
+            y_end += IGNORE_WIDTH
         else:
             y_end = self.map.info.height - 1
         self.get_logger().info("{}, {}, {}, {}".format(str(int(x_start)), str(int(x_end)), str(int(y_start)), str(int(y_end))))
         matrix_map[int(x_start):int(x_end), int(y_start):int(y_end)] = GRID_STATES.EMPTY
         
-        inflated_map = deepcopy(self.map)
-        inflated_map.data = matrix_map.flatten().tolist()
-        self.inflated_map_pub.publish(inflated_map)
+        x_start = map_origin_x
+        x_end = map_origin_x
+        y_start = map_origin_y
+        y_end = map_origin_y
+        IGNORE_WIDTH = 8
+        if map_origin_x >= IGNORE_WIDTH:
+            x_start -= IGNORE_WIDTH
+        else:
+            x_start = 0
+        if map_origin_x < (self.map.info.width - IGNORE_WIDTH):
+            x_end += IGNORE_WIDTH
+        else:
+            x_end = self.map.info.width - 1
+        if map_origin_y >= IGNORE_WIDTH:
+            y_start -= IGNORE_WIDTH
+        else:
+            y_start = 0
+        if map_origin_y < (self.map.info.height - IGNORE_WIDTH):
+            y_end += IGNORE_WIDTH
+        else:
+            y_end = self.map.info.height - 1
+        self.get_logger().info("{}, {}, {}, {}".format(str(int(x_start)), str(int(x_end)), str(int(y_start)), str(int(y_end))))
+        matrix_map[int(x_start):int(x_end), int(y_start):int(y_end)] = GRID_STATES.EMPTY
+        
+        # inflated_map = deepcopy(self.map)
+        # inflated_map.data = matrix_map.flatten().tolist()
+        # self.inflated_map_pub.publish(inflated_map)
         
         inflation_end_t = time.time()
         self.get_logger().info("Inflation took: {:.5f}".format(inflation_end_t - inflation_start_t))
         # =======================
         # ==== INFLATION END ====
         # =======================
+        
+        # # Good filter but conflicts with the exploration phase
+        # if matrix_map[map_target_x, map_target_y] == GRID_STATES.OCCUPIED:
+        #     self.get_logger().info("Destination is an obstacle")
+        #     return None
+        if matrix_map[map_target_x, map_target_y] == GRID_STATES.BORDER:
+            self.get_logger().info("Destination is a border")
+            return None
         
         # ========================
         # ==== DIJKSTRA START ====

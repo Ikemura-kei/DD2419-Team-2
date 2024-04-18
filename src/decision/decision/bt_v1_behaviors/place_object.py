@@ -10,18 +10,23 @@ class PlaceObject(TemplateBehavior):
         super().__init__(name)
         # -- the time when we start placing object, used to determine if the object is placed successfully --
         self.register_value('place_start_time', read=True, write=True)
-
-        self.place_pub = None
+        
+        self.start_time = None
+        self.START_COOLDOWN = 8.12
 
     def initialise(self) -> None:
         self.is_place_cmd_published = False
-        if self.place_pub is None:
-            self.place_pub = self.node.create_publisher(Bool, '/drop_obj', 10)
+        self.start_time = self.node.get_clock().now()
+            
         return super().initialise()
 
     def update(self):
+        dt_since_start = (self.node.get_clock().now() - self.start_time).nanoseconds / 1e9
+        if dt_since_start <= self.START_COOLDOWN:
+            return py_trees.common.Status.RUNNING
+        
         if not self.is_place_cmd_published:
-            self.place_pub.publish(Bool(data=True))
+            self.node.drop_pub.publish(Bool(data=True))
             self.is_place_cmd_published = True
             self.blackboard.set('place_start_time', self.node.get_clock().now())
         
