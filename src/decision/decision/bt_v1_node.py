@@ -12,7 +12,7 @@ from tf2_ros.transform_listener import TransformListener
 from tf2_ros.buffer import Buffer
 from geometry_msgs.msg import PointStamped
 from sensor_msgs.msg import Joy
-from std_msgs.msg import Bool
+from std_msgs.msg import Bool, Int16
 
 class TfNode(Node):
     def __init__(self):
@@ -30,6 +30,7 @@ class BTV1Node(Node):
         self.emergency_stop_pub = self.create_publisher(Bool, '/emergency_stop', 10)
         self.pick_pub = self.create_publisher(PointStamped, '/pick_ik', 10)
         self.drop_pub = self.create_publisher(Bool, '/drop_obj', 10)
+        self.traj_follower_mode_pub = self.create_publisher(Int16, 'traj_follower_mode', 10)
 
 def main():
     print("Hello World from bt_v1_node.py")
@@ -100,14 +101,19 @@ def create_root():
     # -- LEVEL 5 --
     object_found = ObjectFound()
     wonder_around = WonderAround()
-    m_s_object_near = py_trees.composites.Selector(name='m_s_object_near', memory=False)
+    # m_s_object_near = py_trees.composites.Selector(name='m_s_object_near', memory=False)
+    m_s_approach_point_reached = py_trees.composites.Selector(name='m_s_approach_point_reached', memory=False)
+    m_s_approached = py_trees.composites.Selector(name='m_s_approached', memory=False)
     m_s_object_picked = py_trees.composites.Selector(name='m_s_object_picked', memory=False)
     m_s_object_in_hand = py_trees.composites.Selector(name='m_s_object_in_hand', memory=False)
     go_and_place = py_trees.composites.Sequence(name='go_and_place', memory=True)
 
     # -- LEVEL 6 --
+    # drive_to_object = DriveToObject()
+    obj_approach_point_reached = ObjApproachPointReached()
+    drive_to_obj_approach_point = DriveToObjApproachPoint()
     object_near = ObjectNear()
-    drive_to_object = DriveToObject()
+    approach_obj = ApproachObj()
     object_at_hand = ObjectAtHand()
     pick_object = PickObject()
     object_at_hand_2 = ObjectAtHand(always_true=True)
@@ -130,14 +136,17 @@ def create_root():
     m_s_object_placed.add_children([object_in_box, place_object])
 
     # -- ASSEMBLY: LEVEL 5 --
-    m_s_object_near.add_children([object_near, drive_to_object])
+    # m_s_object_near.add_children([object_near, drive_to_object])
+    m_s_approach_point_reached.add_children([obj_approach_point_reached, drive_to_obj_approach_point])
+    m_s_approached.add_children([object_near, approach_obj])
     m_s_object_picked.add_children([object_at_hand, pick_object])
     m_s_object_in_hand.add_children([object_at_hand_2, get_object_back])
     go_and_place.add_children([m_s_box_found, m_s_box_near, m_s_object_placed])
 
     # -- ASSEMBLY: LEVEL 4 --
     m_s_object_found.add_children([object_found, wonder_around])
-    collect_object.add_children([m_s_object_near, m_s_object_picked])
+    # collect_object.add_children([m_s_object_near, m_s_object_picked])
+    collect_object.add_children([m_s_approach_point_reached, m_s_approached, m_s_object_picked])
     place_object_.add_children([m_s_object_in_hand, go_and_place])
 
     # -- ASSEMBLY: LEVEL 3 --

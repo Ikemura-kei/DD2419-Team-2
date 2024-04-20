@@ -8,6 +8,7 @@ from tf2_ros.buffer import Buffer
 from tf2_geometry_msgs.tf2_geometry_msgs import do_transform_pose
 import rclpy
 import numpy as np
+from std_msgs.msg import Int16
 
 class ObjectNear(TemplateBehavior):
     def __init__(self, name="object_near"):
@@ -18,7 +19,7 @@ class ObjectNear(TemplateBehavior):
         self.register_value('object_poses', read=True, write=False)
 
         self.TF_TIMEOUT = rclpy.duration.Duration(seconds=0.005)
-        self.NEAR_DISTANCE_THRESHOLD = 0.75 # meters, should be within arm reach
+        self.NEAR_DISTANCE_THRESHOLD = 0.0765 # meters, should be within arm reach
 
     def initialise(self) -> None:
         return super().initialise()
@@ -46,6 +47,9 @@ class ObjectNear(TemplateBehavior):
         distance  = np.sqrt(pose_base.position.x**2 + pose_base.position.y**2) # euclidian distance
         print("distance: ", distance)
         if distance <= self.NEAR_DISTANCE_THRESHOLD:
+            mode = Int16()
+            mode.data = 2 # disable
+            self.node.traj_follower_mode_pub.publish(mode)
             return py_trees.common.Status.SUCCESS
         else:
             return py_trees.common.Status.FAILURE

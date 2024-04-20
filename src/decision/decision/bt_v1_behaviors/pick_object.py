@@ -5,6 +5,7 @@ from geometry_msgs.msg import PoseStamped, PointStamped
 import rclpy
 from tf2_ros import TransformException
 from tf2_geometry_msgs import do_transform_pose
+from std_msgs.msg import Int16
 
 class PickObject(TemplateBehavior):
     def __init__(self, name="pick_object"):
@@ -19,7 +20,7 @@ class PickObject(TemplateBehavior):
         self.pick_point = PointStamped()
         self.is_first_cmd = True
         self.start_time = None
-        self.START_COOLDOWN = 20.75
+        self.START_COOLDOWN = 4.75
         self.accumulator = 0
         self.ACCUMULATOR_STEP = 0.0234
         self.TF_TIMEOUT = rclpy.duration.Duration(seconds=0.005)
@@ -32,6 +33,11 @@ class PickObject(TemplateBehavior):
 
     def update(self):
         ik_res = None
+        
+        mode = Int16()
+        mode.data = 2 # disable
+        self.node.traj_follower_mode_pub.publish(mode)
+            
         try:
             target_object = self.blackboard.get('target_object')
             object_poses = self.blackboard.get('object_poses')
@@ -69,9 +75,9 @@ class PickObject(TemplateBehavior):
             
             x_target = pose_base.position.x
             y_target = pose_base.position.y
-            if pose_base.position.x <= 0.1185: # will collide with body
+            if pose_base.position.x <= 0.1195: # will collide with body
                 self.node.get_logger().warn("pick goal too close to robot body!")
-                x_target = 0.1185
+                x_target = 0.1195
             if y_target < -0.05:
                 y_target = -0.045
             if y_target > 0.05:
@@ -80,8 +86,8 @@ class PickObject(TemplateBehavior):
             self.pick_point.header.frame_id = "base_link"
             self.pick_point.header.stamp = self.node.get_clock().now().to_msg()
             self.pick_point.point.x = x_target if (x_target <= 0.1625) else 0.1625
-            self.pick_point.point.y = y_target + added_term + 0.06
-            self.pick_point.point.z = -0.0475
+            self.pick_point.point.y = y_target + added_term
+            self.pick_point.point.z = -0.0495
             self.accumulator += self.ACCUMULATOR_STEP
             
             # -- for debug --

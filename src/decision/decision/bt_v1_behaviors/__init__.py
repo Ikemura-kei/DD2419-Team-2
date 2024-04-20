@@ -14,3 +14,6 @@ from .work_not_done import WorkNotDone
 from .mark_work_done import MarkWorkDone
 from .proc_data import ProcData
 from .emergency_stop import EmergencyStop
+from .drive_to_obj_approach_point import DriveToObjApproachPoint
+from .obj_approach_point_reached import ObjApproachPointReached
+from .approach_obj import ApproachObj

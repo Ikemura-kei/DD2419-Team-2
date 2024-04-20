@@ -6,6 +6,7 @@ from geometry_msgs.msg import PointStamped, PoseStamped
 import rclpy
 from tf2_ros import TransformException
 from tf2_geometry_msgs import do_transform_pose
+from std_msgs.msg import Int16
 
 class WonderAround(TemplateBehavior):
     def __init__(self, name="wonder_around", cooldown=49.76):
@@ -45,6 +46,10 @@ class WonderAround(TemplateBehavior):
         
         if self.last_cmd_send_time is None or self.last_cmd_update_time is None:
             return py_trees.common.Status.RUNNING
+        
+        mode = Int16()
+        mode.data = 0 # path following
+        self.node.traj_follower_mode_pub.publish(mode)
         
         dt_cmd_update = (self.node.get_clock().now() - self.last_cmd_update_time).nanoseconds / 1e9
         dt_cmd_send = (self.node.get_clock().now() - self.last_cmd_send_time).nanoseconds / 1e9
