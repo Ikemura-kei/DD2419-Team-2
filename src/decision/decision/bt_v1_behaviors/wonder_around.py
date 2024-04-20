@@ -14,7 +14,7 @@ class WonderAround(TemplateBehavior):
         self.last_cmd_send_time = None
         self.last_cmd_update_time = None
         
-        self.CMD_SEND_PERIOD = 0.175
+        self.CMD_SEND_PERIOD = 0.1
         self.CMD_UPDATE_PERIOD = 15.75
         
         self.target_pos = np.array([0.0, 0.0])
@@ -31,10 +31,8 @@ class WonderAround(TemplateBehavior):
         self.last_cmd_update_time = self.node.get_clock().now()
         if self.start_time is None:
             self.start_time = self.node.get_clock().now()
-        self.target_pos[0] = np.random.rand() * self.TARGET_GOAL_X_RANGE + self.TARGET_GOAL_X_BOUND[0] 
-        self.target_pos[1] = np.random.rand() * self.TARGET_GOAL_Y_RANGE + self.TARGET_GOAL_Y_BOUND[0] 
-        # self.target_pos[0] = -2
-        # self.target_pos[1] = 0
+        self.target_pos[0] = 1.7 + (np.random.rand()-0.5) * 0.25
+        self.target_pos[1] = 0.345 + (np.random.rand()-0.5) * 0.25
         return super().initialise()
 
     def update(self):

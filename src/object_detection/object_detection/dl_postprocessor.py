@@ -2,6 +2,7 @@
 import rclpy 
 from rclpy.node import Node
 from dl_perception_interfaces.msg import  BoundingBoxArray, ObjectInstanceArray, ObjectInstance
+import rclpy.time
 import tf2_ros
 from tf2_ros import TransformException
 from tf2_ros.buffer import Buffer
@@ -10,6 +11,7 @@ from tf2_ros import TransformBroadcaster
 import time
 from tf2_geometry_msgs import  PointStamped
 from geometry_msgs.msg import TransformStamped, Point, Quaternion, Vector3
+from visualization_msgs.msg import Marker, MarkerArray
 import message_filters 
 from scipy.cluster.hierarchy import linkage, fcluster
 from scipy.spatial.distance import pdist
@@ -23,6 +25,7 @@ import os
 from std_msgs.msg import String
 from builtin_interfaces.msg import Time
 from datetime import timedelta
+from copy import deepcopy
 from typing import List
 
 class Instance():
@@ -76,7 +79,7 @@ class Object_postprocessor(Node):
         self.update_dt = 1.0/self.update_rate # [s]
         self.rate = self.create_rate(self.update_rate)
 
-
+        self.make_marker_template()
         # Subscribers 
         self.sub_bounding_boxes = self.create_subscription(
             BoundingBoxArray,
@@ -107,20 +110,22 @@ class Object_postprocessor(Node):
              "/detection/object_instances", 
             10)
         
+        self.markers_pub = self.create_publisher(MarkerArray, '/detection/marker_array', 10)
+        
         self.speaker_pub = self.create_publisher(
             String, 
             "/speaker/speech", 
             10)
         
-        time.sleep(4)
+        time.sleep(1)
         
         # Initialize the transform broadcaster
         self.tf_broadcaster = TransformBroadcaster(self)
         
         self.LOOK_BACK_DURATION = 2.35 # [s]
-        self.OBJECT_NEAR_THRESHOLD = 0.05 # [m]
-        self.OBJ_HEIGHT_THRESHOLD = 0.0425 # [m]
-        self.DET_CNT_THRESHOLD = 10
+        self.OBJECT_NEAR_THRESHOLD = 0.175 # [m]
+        self.OBJ_HEIGHT_THRESHOLD = 0.0555 # [m]
+        self.DET_CNT_THRESHOLD = 30
         
     def filter(self, batch, time):
         nb_msgs = len(batch)
@@ -174,9 +179,7 @@ class Object_postprocessor(Node):
             x = np.mean(x)
             y = np.mean(y)
             z = np.mean(z)
-            if z > 0.1:
-                # z += 0.1475
-                z += 0.1165
+
             if y < self.OBJ_HEIGHT_THRESHOLD:
                 continue
             
@@ -303,7 +306,8 @@ class Object_postprocessor(Node):
                             os.remove(old_instance_path)
             else:
                 # -- associate the new observation to whatever matched one that is closest and distance smaller than threshold --
-                found_close, old_instance_key = self.found_close(instances_matched_by_category, point_map, 0.3, self.objects_dict)
+                found_close, old_instance_key = self.found_close(instances_matched_by_category, point_map, 0.35, self.objects_dict)
+                # -- NOTE: we typically use a larger threshold since the same label gives us more confidence --
             
                 if found_close: 
                     # -- update the matched object in database --
@@ -438,6 +442,39 @@ class Object_postprocessor(Node):
         
         self.tf_broadcaster.sendTransform(t)
         
+    def make_marker_template(self):
+        marker = Marker()
+        marker.header.frame_id = 'map'
+        
+        marker.pose.orientation.w = 1.0
+        
+        marker.scale.x = marker.scale.y = marker.scale.z = 0.085
+        marker.lifetime = rclpy.time.Duration(nanoseconds=0).to_msg()
+        
+        marker.action = Marker.ADD
+        marker.type = Marker.CUBE
+        
+        marker.color.a = 1.0
+        marker.color.g = marker.color.r = 0.5
+        marker.color.b = 1.0
+        
+        self.marker_template = marker
+        
+    def make_marker(self, point_map, stamp, id, is_new=True):
+        marker = deepcopy(self.marker_template)
+        
+        marker.header.stamp = stamp
+        
+        marker.pose.position.x = point_map.point.x
+        marker.pose.position.y = point_map.point.y
+        marker.pose.position.z = 0.0
+        marker.id = id+1
+        
+        marker.color.r += (np.random.rand()-0.5) * 0.2
+        marker.color.g += (np.random.rand()-0.5) * 0.1
+        
+        return marker
+        
     def bounding_boxes_callback(self, msg):
         self.bounding_boxes_buffer.append(msg)
 
@@ -480,6 +517,7 @@ class Object_postprocessor(Node):
         
         self.publish_instances()
         self.get_logger().info(str(self.objects_dict))
+        markers = MarkerArray()
         for keys in self.objects_dict:
             instance = self.objects_dict[keys]
             if instance[4] <= self.DET_CNT_THRESHOLD:
@@ -491,6 +529,9 @@ class Object_postprocessor(Node):
             point_map.point.y = instance[2]
             point_map.point.z = instance[3]
             self.publish_tf(keys, point_map)
+            markers.markers.append(self.make_marker(point_map, current_time.to_msg(), instance[5]))
+            
+        self.markers_pub.publish(markers)
         
         if len(batch) == 0:
             return

@@ -21,7 +21,7 @@ class DriveToObject(TemplateBehavior):
         self.TARGET_DIFF_THRESHOLD = 0.02 # meters
         self.last_pose = None
         self.last_cmd_pub_time = None
-        self.CMD_PUB_PERIOD = 0.185 # seconds
+        self.CMD_PUB_PERIOD = 0.1 # seconds
         self.goal_sent = False
         
     def initialise(self) -> None:
@@ -51,8 +51,8 @@ class DriveToObject(TemplateBehavior):
 
         orig_x = pose_map.pose.position.x
         orig_y = pose_map.pose.position.y
-        pose_map.pose.position.x = pose_map.pose.position.x - 0.115
-        pose_map.pose.position.y = pose_map.pose.position.y + 0.075
+        pose_map.pose.position.x = pose_map.pose.position.x - 0.1675
+        pose_map.pose.position.y = pose_map.pose.position.y + 0.115
         
         if not do_send_command:
             return py_trees.common.Status.RUNNING

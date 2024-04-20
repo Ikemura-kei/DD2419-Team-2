@@ -60,7 +60,7 @@ class PathPlanner(Node):
         self._path = Path() 
 
         self.last_time = self.get_clock().now() 
-        self.timer = self.create_timer(0.2, self.dijkstra)
+        self.timer = self.create_timer(0.175, self.dijkstra)
         
         self.NO_PLAN_DISTANCE_THRESHOLD = 0.25
 

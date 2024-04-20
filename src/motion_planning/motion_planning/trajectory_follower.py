@@ -10,7 +10,6 @@ from visualization_msgs.msg import Marker
 class TrajectoryFollower(Node):
     def __init__(self):
         super().__init__('trajectory_follower')
-        self.create_timer(0.01, self.timer_callback)
         self.get_logger().info('Trajectory Follower has been started')
         
         self.path_sub = self.create_subscription(Path, '/path', self.path_cb, 10)
@@ -48,11 +47,12 @@ class TrajectoryFollower(Node):
         self.last_angle_sign = 1
         self.ANGLE_BOUNDARY_THRESHOLD = 3.0 * np.pi / 180.0
         self.ANGLE_DRAMATIC_CHANGE_THRESHOLD = 100 * np.pi / 180.0
-        self.ANGLE_SMALL_TRESHOLD = 6.8 * np.pi / 180.0
+        self.ANGLE_SMALL_TRESHOLD = 5.0 * np.pi / 180.0
         
         self.poses = None
         
         self.goal_x = self.goal_y = None
+        self.create_timer(0.02, self.timer_callback)
 
     def timer_callback(self):
         self.get_logger().info('Trajectory Follower is running')
@@ -78,18 +78,27 @@ class TrajectoryFollower(Node):
         
         if self.path is None or self.poses is None or self.failure_cnt > self.TF_FAILURE_CNT_THRESHOLD:
             twist = Twist()
-            
+            self.get_logger().info("Goal to faec at {}, {}".format(self.goal_x, self.goal_y))
             if self.goal_y is not None and self.goal_x is not None:
                 # -- execute actions to face the specified goal --
                 angle = np.arctan2(self.goal_y-self.y, self.goal_x-self.x) - theta
                 # -- wrap the angle into -pi and pi range --
                 angle = np.mod(angle+np.pi,2*np.pi)-np.pi
-                if np.abs(angle) <= np.pi / 4.0:
-                    twist.angular.z = -angle * self.OMEGA_P * 5.975
-                else:
-                    twist.angular.z = -angle * self.OMEGA_P * 1.975
-                twist.linear.x = 0.005
-                if np.abs(angle) <= self.ANGLE_SMALL_TRESHOLD:
+                dist = np.sqrt((self.goal_y-self.y)**2 + (self.goal_x-self.x)**2)
+                
+                if dist <= (self.GOAL_REACH_THD + 0.35):
+                    # if np.abs(angle) <= np.pi / 8.0:
+                    #     twist.angular.z = -angle * self.OMEGA_P * 5.475
+                    # elif np.abs(angle) <= np.pi / 18.0:
+                    #     twist.angular.z = -angle * self.OMEGA_P * 6.375
+                    # elif np.abs(angle) >= np.pi / 3.0:
+                    #     twist.angular.z = -angle * self.OMEGA_P * 0.6
+                    # else:
+                    #     twist.angular.z = -angle * self.OMEGA_P * 1.05
+                    twist.angular.z = -np.sign(angle) * 1.425
+                    twist.linear.x = 0.0
+                
+                if dist <= (self.GOAL_REACH_THD + 0.35) and np.abs(angle) <= self.ANGLE_SMALL_TRESHOLD:
                     self.goal_y = self.goal_x = None
                     
                 self.get_logger().info("Executing face to goal at {}, {}, angle: {}".format(self.goal_x, self.goal_y, angle))
@@ -157,7 +166,7 @@ class TrajectoryFollower(Node):
         marker.pose.position.y = target[1]
         marker.pose.position.z = 0.0
         marker.lifetime = rclpy.time.Duration(seconds=0.5).to_msg()
-        marker.scale.x = marker.scale.y = marker.scale.z = 0.1
+        marker.scale.x = marker.scale.y = marker.scale.z = 0.07
         marker.color.a = 1.0
         marker.color.r = 1.0
         marker.color.g = 0.0
@@ -192,6 +201,7 @@ class TrajectoryFollower(Node):
         self.cmd_vel_pub.publish(twist) 
         
     def goal_cb(self, msg:PointStamped):
+        self.get_logger().info("Goal to face at received.")
         self.goal_x = msg.point.x
         self.goal_y = msg.point.y
         
