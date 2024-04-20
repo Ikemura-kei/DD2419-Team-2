@@ -19,9 +19,9 @@ class PickObject(TemplateBehavior):
         self.pick_point = PointStamped()
         self.is_first_cmd = True
         self.start_time = None
-        self.START_COOLDOWN = 6.75
+        self.START_COOLDOWN = 20.75
         self.accumulator = 0
-        self.ACCUMULATOR_STEP = 0.02
+        self.ACCUMULATOR_STEP = 0.0234
         self.TF_TIMEOUT = rclpy.duration.Duration(seconds=0.005)
 
     def initialise(self) -> None:
@@ -69,9 +69,9 @@ class PickObject(TemplateBehavior):
             
             x_target = pose_base.position.x
             y_target = pose_base.position.y
-            if pose_base.position.x <= 0.0985: # will collide with body
+            if pose_base.position.x <= 0.1185: # will collide with body
                 self.node.get_logger().warn("pick goal too close to robot body!")
-                x_target = 0.0985
+                x_target = 0.1185
             if y_target < -0.05:
                 y_target = -0.045
             if y_target > 0.05:
@@ -80,7 +80,7 @@ class PickObject(TemplateBehavior):
             self.pick_point.header.frame_id = "base_link"
             self.pick_point.header.stamp = self.node.get_clock().now().to_msg()
             self.pick_point.point.x = x_target if (x_target <= 0.1625) else 0.1625
-            self.pick_point.point.y = y_target + added_term
+            self.pick_point.point.y = y_target + added_term + 0.06
             self.pick_point.point.z = -0.0475
             self.accumulator += self.ACCUMULATOR_STEP
             

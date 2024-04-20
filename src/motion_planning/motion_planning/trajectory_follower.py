@@ -47,7 +47,7 @@ class TrajectoryFollower(Node):
         self.last_angle_sign = 1
         self.ANGLE_BOUNDARY_THRESHOLD = 3.0 * np.pi / 180.0
         self.ANGLE_DRAMATIC_CHANGE_THRESHOLD = 100 * np.pi / 180.0
-        self.ANGLE_SMALL_TRESHOLD = 5.0 * np.pi / 180.0
+        self.ANGLE_SMALL_TRESHOLD = 5.02 * np.pi / 180.0
         
         self.poses = None
         
@@ -86,7 +86,7 @@ class TrajectoryFollower(Node):
                 angle = np.mod(angle+np.pi,2*np.pi)-np.pi
                 dist = np.sqrt((self.goal_y-self.y)**2 + (self.goal_x-self.x)**2)
                 
-                if dist <= (self.GOAL_REACH_THD + 0.35):
+                if dist <= (self.GOAL_REACH_THD + 0.425):
                     # if np.abs(angle) <= np.pi / 8.0:
                     #     twist.angular.z = -angle * self.OMEGA_P * 5.475
                     # elif np.abs(angle) <= np.pi / 18.0:
@@ -95,11 +95,15 @@ class TrajectoryFollower(Node):
                     #     twist.angular.z = -angle * self.OMEGA_P * 0.6
                     # else:
                     #     twist.angular.z = -angle * self.OMEGA_P * 1.05
-                    twist.angular.z = -np.sign(angle) * 1.425
-                    twist.linear.x = 0.0
+                    twist.angular.z = -np.sign(angle) * 2.76
                 
-                if dist <= (self.GOAL_REACH_THD + 0.35) and np.abs(angle) <= self.ANGLE_SMALL_TRESHOLD:
+                if dist >= (0.03) and np.abs(angle) <= self.ANGLE_SMALL_TRESHOLD:
+                    twist.linear.x = 0.8
+                    twist.angular.z = 0.0
+                elif dist <= (0.03) and np.abs(angle) <= self.ANGLE_SMALL_TRESHOLD:
                     self.goal_y = self.goal_x = None
+                    twist.linear.x = 0.0
+                    twist.angular.z = 0.0
                     
                 self.get_logger().info("Executing face to goal at {}, {}, angle: {}".format(self.goal_x, self.goal_y, angle))
             else:

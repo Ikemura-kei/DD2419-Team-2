@@ -51,9 +51,12 @@ class DriveToObject(TemplateBehavior):
 
         orig_x = pose_map.pose.position.x
         orig_y = pose_map.pose.position.y
-        pose_map.pose.position.x = pose_map.pose.position.x - 0.1675
-        pose_map.pose.position.y = pose_map.pose.position.y + 0.115
+        # pose_map.pose.position.x = pose_map.pose.position.x - 0.1375
+        # pose_map.pose.position.y = pose_map.pose.position.y + 0.115
         
+        pose_map.pose.position.x = pose_map.pose.position.x - 0.24375
+        pose_map.pose.position.y = pose_map.pose.position.y + 0.115
+
         if not do_send_command:
             return py_trees.common.Status.RUNNING
         
@@ -78,8 +81,8 @@ class DriveToObject(TemplateBehavior):
             goal_loc = PointStamped()
             goal_loc.header.frame_id = 'map'
             goal_loc.header.stamp = self.node.get_clock().now().to_msg()
-            goal_loc.point.x = orig_x
-            goal_loc.point.y = orig_y
+            goal_loc.point.x = orig_x + 0.1795
+            goal_loc.point.y = orig_y + 0.06525
             self.node.goal_loc_pub.publish(goal_loc)
         
         self.last_pose = pose_map.pose
