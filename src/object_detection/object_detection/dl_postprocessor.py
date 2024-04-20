@@ -123,7 +123,7 @@ class Object_postprocessor(Node):
         self.tf_broadcaster = TransformBroadcaster(self)
         
         self.LOOK_BACK_DURATION = 2.35 # [s]
-        self.OBJECT_NEAR_THRESHOLD = 0.175 # [m]
+        self.OBJECT_NEAR_THRESHOLD = 0.305 # [m]
         self.OBJ_HEIGHT_THRESHOLD = 0.0555 # [m]
         self.DET_CNT_THRESHOLD = 30
         
@@ -306,7 +306,7 @@ class Object_postprocessor(Node):
                             os.remove(old_instance_path)
             else:
                 # -- associate the new observation to whatever matched one that is closest and distance smaller than threshold --
-                found_close, old_instance_key = self.found_close(instances_matched_by_category, point_map, 0.35, self.objects_dict)
+                found_close, old_instance_key = self.found_close(instances_matched_by_category, point_map, 0.475, self.objects_dict)
                 # -- NOTE: we typically use a larger threshold since the same label gives us more confidence --
             
                 if found_close: 

@@ -11,15 +11,15 @@ from copy import deepcopy
 import numpy as np
 from std_msgs.msg import Int16
     
-class DriveToObjApproachPoint(TemplateBehavior):
-    def __init__(self, name="drive_to_obj_approach_point"):
+class DriveToBoxApproachPoint(TemplateBehavior):
+    def __init__(self, name="drive_to_box_approach_point"):
         super().__init__(name)
-        # -- the name of the object we set to pick, naming format follows "<obj_type>_<unique_id>", for example "cube_1" --
-        self.register_value('target_object', read=True, write=False)
-        # -- a dictionary containing object poses (as geometry_msgs.msg.PoseStamped), the naming format of objects follows that above --
-        self.register_value('object_poses', read=True, write=False)
+        # -- the name of the box we set to put our object in, naming format follows "<obj_type>_<unique_id>", for example "cube_1" --
+        self.register_value('target_box', read=True, write=False)
+        # -- the poses of the boxes (specified by geometry_msgs.msg.PoseStamped), naming format follows that above --
+        self.register_value(key="box_poses", read=True, write=False)
         
-        self.register_value('obj_approach_pnt', read=True, write=True)
+        self.register_value('box_approach_pnt', read=True, write=True)
 
         self.TF_TIMEOUT = rclpy.duration.Duration(seconds=0.05)
         self.TARGET_DIFF_THRESHOLD = 0.02 # meters
@@ -51,12 +51,12 @@ class DriveToObjApproachPoint(TemplateBehavior):
 
     def update(self):
         try:
-            target_object = self.blackboard.get('target_object')
-            object_poses = self.blackboard.get('object_poses')
+            target_box = self.blackboard.get('target_box')
+            box_poses = self.blackboard.get('box_poses')
         except:
             return py_trees.common.Status.RUNNING
         
-        pose_map:PoseStamped = deepcopy(object_poses[target_object])
+        pose_map:PoseStamped = deepcopy(box_poses[target_box])
         
         do_send_command = False
         if self.last_cmd_pub_time is not None:
@@ -90,7 +90,7 @@ class DriveToObjApproachPoint(TemplateBehavior):
             
             self.goal_sent = True
             
-            self.blackboard.set('obj_approach_pnt', self.goal_map)
+            self.blackboard.set('box_approach_pnt', self.goal_map)
 
         pose_base = do_transform_pose(self.goal_map.pose, transform)
 

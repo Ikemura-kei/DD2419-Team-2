@@ -13,6 +13,7 @@ find_package(geometry_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
+find_package(dd2419_interfaces REQUIRED)
 
 add_executable(mapper_node src/MapperNode.cpp)
 target_include_directories(mapper_node PUBLIC
@@ -27,6 +28,7 @@ ament_target_dependencies(
   "sensor_msgs"
   "tf2_ros"
   "tf2_geometry_msgs"
+  "dd2419_interfaces"
 )
 
 install(TARGETS mapper_node

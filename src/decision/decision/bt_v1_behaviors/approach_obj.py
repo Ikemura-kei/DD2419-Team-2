@@ -22,7 +22,7 @@ class ApproachObj(TemplateBehavior):
         self.TF_TIMEOUT = rclpy.duration.Duration(seconds=0.05)
         self.TARGET_DIFF_THRESHOLD = 0.02 # meters
         self.last_cmd_pub_time = None
-        self.CMD_PUB_PERIOD = 0.1 # seconds
+        self.CMD_PUB_PERIOD = 0.02 # seconds
         
         self.start_time = None
         self.START_COOLDOWN = 7.0
@@ -61,15 +61,14 @@ class ApproachObj(TemplateBehavior):
         mode = Int16()
         mode.data = 1 # drive to point
         self.node.traj_follower_mode_pub.publish(mode)
+                
+        goal_loc = PointStamped()
+        goal_loc.header.frame_id = 'map'
+        goal_loc.header.stamp = self.node.get_clock().now().to_msg()
+        goal_loc.point.x = pose_map.pose.position.x
+        goal_loc.point.y = pose_map.pose.position.y
+        self.node.goal_loc_pub.publish(goal_loc)
         
-        dist = np.sqrt(pose_map.pose.position.x**2 + pose_map.pose.position.y**2)
-        
-        if dist >= 0.088:
-            goal_loc = PointStamped()
-            goal_loc.header.frame_id = 'map'
-            goal_loc.header.stamp = self.node.get_clock().now().to_msg()
-            goal_loc.point.x = pose_map.pose.position.x
-            goal_loc.point.y = pose_map.pose.position.y
-            self.node.goal_loc_pub.publish(goal_loc)
+        self.node.get_logger().info(str(goal_loc))
         
         return py_trees.common.Status.RUNNING

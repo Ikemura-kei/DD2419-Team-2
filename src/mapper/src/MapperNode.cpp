@@ -17,6 +17,7 @@
 #include "geometry_msgs/msg/transform_stamped.hpp"
 #include "sensor_msgs/msg/laser_scan.hpp"
 #include "sensor_msgs/msg/point_cloud2.hpp"
+#include "dd2419_interfaces/msg/object_poses.hpp"
 
 // -- tf2 stuff --
 #include "tf2/exceptions.h"
@@ -46,6 +47,7 @@ public:
     //     depthTopic, 10, std::bind(&MapperNode::depthImageCb, this, _1));
     scanSub = this->create_subscription<sensor_msgs::msg::LaserScan>(scanTopic, 10, std::bind(&MapperNode::scanCb, this, _1));
     pntCldSub = this->create_subscription<sensor_msgs::msg::PointCloud2>(pntCldTopic, 10, std::bind(&MapperNode::pntCldCb, this, _1));
+    objPosesSub = this->create_subscription<dd2419_interfaces::msg::ObjectPoses>(objPoseTopic, 10, std::bind(&MapperNode::objPosesCb, this, _1));
 
     // -- create publishers --
     mapPub = this->create_publisher<nav_msgs::msg::OccupancyGrid>(mapTopic, 10);
@@ -84,6 +86,25 @@ private:
     candidateMap.header.stamp = this->get_clock()->now();
     mapPub->publish(map);
     candidateMapPub->publish(candidateMap);
+  }
+
+  void objPosesCb(const dd2419_interfaces::msg::ObjectPoses::SharedPtr objPoses)
+  {
+    RCLCPP_INFO_STREAM(this->get_logger(), "Received obj poses data.");
+    std::vector<geometry_msgs::msg::Point> mapPoints;
+
+    for (auto obj : objPoses->poses)
+    {
+      for (int i = -3; i < 3; i++)
+      {
+        geometry_msgs::msg::Point pnt;
+        pnt.x = obj.pose.position.x + i * map.info.resolution;
+        pnt.y = obj.pose.position.y + i * map.info.resolution;
+        mapPoints.push_back(pnt);
+      }
+    }
+
+    updateMap(mapPoints, false, 20);
   }
 
   void pntCldCb(const sensor_msgs::msg::PointCloud2::SharedPtr pntCld)
@@ -298,7 +319,7 @@ private:
     updateMap(transformedPoints);
   }
 
-  void updateMap(std::vector<geometry_msgs::msg::Point> &points, bool isScan = false)
+  void updateMap(std::vector<geometry_msgs::msg::Point> &points, bool isScan = false, int score=5)
   {
     // -- update the candidate map with the new points --
     std::vector<uint8_t> updateMask(map.info.width * map.info.height, 0);
@@ -340,12 +361,12 @@ private:
               candidateMap.data[row * map.info.width + col] = 0;
           }
         }
-        else if ((candidateMap.data[row * map.info.width + col] + 5) < 100)
+        else if ((candidateMap.data[row * map.info.width + col] + score) < 100)
         {
           if (isScan)
             candidateMap.data[row * map.info.width + col] += 0;
           else
-            candidateMap.data[row * map.info.width + col] += 3;
+            candidateMap.data[row * map.info.width + col] += score;
         }
       }
     }
@@ -390,11 +411,14 @@ private:
   string depthTopic = "/camera/depth/image_rect_raw";
   string scanTopic = "/scan";
   string mapTopic = "/map";
+  string objPoseTopic = "/object_list_real";
+
   string pntCldTopic = "/camera/depth/color/points";
   string candidateMapTopic = "/candidate_map";
   rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr depthImageSub;
   rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr scanSub;
   rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr pntCldSub;
+  rclcpp::Subscription<dd2419_interfaces::msg::ObjectPoses>::SharedPtr objPosesSub;
   rclcpp::Publisher<nav_msgs::msg::OccupancyGrid>::SharedPtr mapPub;
   rclcpp::Publisher<nav_msgs::msg::OccupancyGrid>::SharedPtr candidateMapPub;
   std::shared_ptr<tf2_ros::TransformListener> tf_listener_{nullptr};

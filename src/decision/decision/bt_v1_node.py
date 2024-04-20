@@ -119,20 +119,27 @@ def create_root():
     object_at_hand_2 = ObjectAtHand(always_true=True)
     get_object_back = GetObjectBackDummy()
     m_s_box_found = py_trees.composites.Selector(name='m_s_box_found', memory=False)
-    m_s_box_near = py_trees.composites.Selector(name='m_s_box_near', memory=False)
+    # m_s_box_near = py_trees.composites.Selector(name='m_s_box_near', memory=False)
+    m_s_box_approach_point_reached = py_trees.composites.Selector(name='m_s_box_approach_point_reached', memory=False)
+    m_s_box_approached = py_trees.composites.Selector(name='m_s_box_approached', memory=False)
     m_s_object_placed = py_trees.composites.Selector(name='m_s_object_placed', memory=False)
 
     # -- LEVEL 7 --
     box_found = BoxFound()
     wonder_around_2 = WonderAround(cooldown=5)
     box_near = BoxNear()
-    drive_to_box = DriveToBox()
+    # drive_to_box = DriveToBox()
+    box_approach_point_reached = BoxApproachPointReached()
+    drive_to_box_approach_point = DriveToBoxApproachPoint()
+    approach_box = ApproachBox()
     object_in_box = ObjectInBox()
     place_object = PlaceObject()
 
     # -- ASSEMBLY: LEVEL 6 --
     m_s_box_found.add_children([box_found, wonder_around_2])
-    m_s_box_near.add_children([box_near, drive_to_box])
+    # m_s_box_near.add_children([box_near, drive_to_box])
+    m_s_box_approach_point_reached.add_children([box_approach_point_reached, drive_to_box_approach_point])
+    m_s_box_approached.add_children([box_near, approach_box])
     m_s_object_placed.add_children([object_in_box, place_object])
 
     # -- ASSEMBLY: LEVEL 5 --
@@ -141,7 +148,8 @@ def create_root():
     m_s_approached.add_children([object_near, approach_obj])
     m_s_object_picked.add_children([object_at_hand, pick_object])
     m_s_object_in_hand.add_children([object_at_hand_2, get_object_back])
-    go_and_place.add_children([m_s_box_found, m_s_box_near, m_s_object_placed])
+    # go_and_place.add_children([m_s_box_found, m_s_box_near, m_s_object_placed])
+    go_and_place.add_children([m_s_box_found, m_s_box_approach_point_reached, m_s_box_approached, m_s_object_placed])
 
     # -- ASSEMBLY: LEVEL 4 --
     m_s_object_found.add_children([object_found, wonder_around])

@@ -107,11 +107,11 @@ class TrajectoryFollower(Node):
             dist = np.sqrt((self.goal_y-self.y)**2 + (self.goal_x-self.x)**2)
             
             # -- set constant angular velocity to face that point first --
-            twist.angular.z = -np.sign(angle) * 2.6
+            twist.angular.z = -np.sign(angle) * 2.15
             
             # -- if we have small enough angular error, we drive toward that goal --
             if dist >= (0.08) and np.abs(angle) <= self.ANGLE_SMALL_TRESHOLD:
-                twist.linear.x = 0.8
+                twist.linear.x = 0.6
                 twist.angular.z = 0.0
             elif dist <= (0.08) and np.abs(angle) <= self.ANGLE_SMALL_TRESHOLD:
                 self.goal_y = self.goal_x = None

@@ -19,7 +19,7 @@ class ObjectNear(TemplateBehavior):
         self.register_value('object_poses', read=True, write=False)
 
         self.TF_TIMEOUT = rclpy.duration.Duration(seconds=0.005)
-        self.NEAR_DISTANCE_THRESHOLD = 0.0765 # meters, should be within arm reach
+        self.NEAR_DISTANCE_THRESHOLD = 0.0755 # meters, should be within arm reach
 
     def initialise(self) -> None:
         return super().initialise()
