@@ -178,8 +178,8 @@ class Object_postprocessor(Node):
             # -- define object position as the mean of all observations --
             x = np.mean(x)
             y = np.mean(y)
-            z = np.mean(z)
-
+            z = np.mean(z) + 0.092
+            
             if y < self.OBJ_HEIGHT_THRESHOLD:
                 continue
             

@@ -356,7 +356,7 @@ private:
           if (!isScan)
           {
             if (candidateMap.data[row * map.info.width + col] > 2)
-              candidateMap.data[row * map.info.width + col] -= 2;
+              candidateMap.data[row * map.info.width + col] -= 0;
             else
               candidateMap.data[row * map.info.width + col] = 0;
           }

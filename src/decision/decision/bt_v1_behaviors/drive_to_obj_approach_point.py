@@ -25,7 +25,7 @@ class DriveToObjApproachPoint(TemplateBehavior):
         self.TARGET_DIFF_THRESHOLD = 0.02 # meters
         self.last_cmd_pub_time = None
         self.CMD_PUB_PERIOD = 0.1 # seconds
-        self.APPROACH_CIRCLE_RADIUS = 0.715 # [m]
+        self.APPROACH_CIRCLE_RADIUS = 0.615 # [m]
         
         np.random.seed(20010427)
         

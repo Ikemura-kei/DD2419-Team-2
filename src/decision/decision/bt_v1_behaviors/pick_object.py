@@ -85,9 +85,9 @@ class PickObject(TemplateBehavior):
             
             self.pick_point.header.frame_id = "base_link"
             self.pick_point.header.stamp = self.node.get_clock().now().to_msg()
-            self.pick_point.point.x = x_target if (x_target <= 0.1625) else 0.1625
+            self.pick_point.point.x = x_target if (x_target <= 0.1625) else 0.1625 + 0.0175
             self.pick_point.point.y = y_target + added_term
-            self.pick_point.point.z = -0.0495
+            self.pick_point.point.z = -0.051
             self.accumulator += self.ACCUMULATOR_STEP
             
             # -- for debug --

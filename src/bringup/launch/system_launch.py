@@ -57,7 +57,7 @@ def generate_launch_description():
         mapper_node, 
         path_planner_node, 
         trajectory_follower_node, 
-        # decision_tree_node, 
+        decision_tree_node, 
         dl_classifier_node,
         dl_post_processor_node,
         object_tracker_node,

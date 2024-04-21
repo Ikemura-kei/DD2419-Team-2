@@ -1,6 +1,8 @@
 import rclpy
+import rclpy.duration
 from rclpy.node import Node
 from nav_msgs.msg import Path
+import rclpy.time
 from std_msgs.msg import Int16
 import numpy as np
 from tf2_ros import Buffer, TransformListener, TransformException
@@ -8,11 +10,20 @@ from geometry_msgs.msg import Twist, PointStamped
 from tf_transformations import euler_from_quaternion
 from visualization_msgs.msg import Marker
 
+class TimedTwist():
+    x_vel = 0
+    z_omega = 0
+    duration: rclpy.duration.Duration = rclpy.duration.Duration(seconds=0)
+    start_t = rclpy.time.Time()
+
 class TrajectoryFollower(Node):
-    MODES = ['path_following', 'to_goal_point', 'disabled']
+    MODES = ['path_following', 'to_goal_point', 'disabled', 'timed_twist']
     def __init__(self):
         super().__init__('trajectory_follower')
         self.get_logger().info('Trajectory Follower has been started')
+        
+        self.timed_twist = TimedTwist()
+        self.timed_twist.start_t = self.get_clock().now()
         
         self.path_sub = self.create_subscription(Path, '/path', self.path_cb, 10)
         self.path = None
@@ -22,6 +33,8 @@ class TrajectoryFollower(Node):
         self.mode_sub = self.create_subscription(Int16, '/traj_follower_mode', self.mode_cb, 10)
         
         self.goal_sub = self.create_subscription(PointStamped, '/goal_loc', self.goal_cb, 10)
+        
+        self.twist_sub = self.create_subscription(Twist, '/timed_twist', self.timed_twist_cb, 10)
         
         self.cmd_vel_pub = self.create_publisher(Twist, '/motor_controller/twist', 10)
         
@@ -51,7 +64,7 @@ class TrajectoryFollower(Node):
         self.last_angle_sign = 1
         self.ANGLE_BOUNDARY_THRESHOLD = 3.0 * np.pi / 180.0
         self.ANGLE_DRAMATIC_CHANGE_THRESHOLD = 100 * np.pi / 180.0
-        self.ANGLE_SMALL_TRESHOLD = 4.02 * np.pi / 180.0
+        self.ANGLE_SMALL_TRESHOLD = 3.02 * np.pi / 180.0
         
         self.poses = None
         
@@ -62,6 +75,12 @@ class TrajectoryFollower(Node):
         assert (msg.data >= 0) and (msg.data < len(self.MODES)), 'Invalid mode {}, expected lowest {} \
             and highest {}'.format(msg.data, 0, len(self.MODES)-1)
         self.mode = self.MODES[msg.data]
+        
+    def timed_twist_cb(self, msg:Twist):
+        self.timed_twist.duration = rclpy.duration.Duration(nanoseconds=int(msg.linear.y * 1e9)) # funnay hack
+        self.timed_twist.x_vel = msg.linear.x
+        self.timed_twist.z_omega = msg.angular.z
+        self.timed_twist.start_t = self.get_clock().now()
 
     def timer_callback(self):
         self.get_logger().info('Trajectory Follower is running')
@@ -85,12 +104,26 @@ class TrajectoryFollower(Node):
             self.get_logger().warn(str(e))
             return
         
-        # -- mode 2: go to goal --
-        if self.mode == self.MODES[2]:
+        if self.mode == self.MODES[3]:
+            self.get_logger().info("MODE 3, cmd {} {} {}".format(self.timed_twist.x_vel, self.timed_twist.z_omega, self.timed_twist.duration.nanoseconds / 1e9))
+            twist = Twist()
+            if self.timed_twist.duration.nanoseconds > 0:
+                twist.angular.z = self.timed_twist.z_omega
+                twist.linear.x = self.timed_twist.x_vel
+                
+                dt = (self.get_clock().now() - self.timed_twist.start_t).nanoseconds / 1e9
+                if dt > (self.timed_twist.duration.nanoseconds / 1e9):
+                    self.timed_twist.duration = rclpy.duration.Duration(seconds=0, nanoseconds=0)
+            
+            self.cmd_vel_pub.publish(twist)
+            
+        elif self.mode == self.MODES[2]: # disable
             twist = Twist()
             self.cmd_vel_pub.publish(twist)
             self.goal_y = self.goal_x = None
+            self.timed_twist.duration = rclpy.duration.Duration(seconds=0, nanoseconds=0)
             
+        # -- mode 2: go to goal --
         elif self.mode == self.MODES[1]:
             self.get_logger().info("Goal to faec at {}, {}".format(self.goal_x, self.goal_y))
             
@@ -110,10 +143,10 @@ class TrajectoryFollower(Node):
             twist.angular.z = -np.sign(angle) * 2.15
             
             # -- if we have small enough angular error, we drive toward that goal --
-            if dist >= (0.08) and np.abs(angle) <= self.ANGLE_SMALL_TRESHOLD:
-                twist.linear.x = 0.6
+            if dist >= (0.012) and np.abs(angle) <= self.ANGLE_SMALL_TRESHOLD:
+                twist.linear.x = 0.625
                 twist.angular.z = 0.0
-            elif dist <= (0.08) and np.abs(angle) <= self.ANGLE_SMALL_TRESHOLD:
+            elif dist <= (0.012) and np.abs(angle) <= self.ANGLE_SMALL_TRESHOLD:
                 self.goal_y = self.goal_x = None
                 twist.linear.x = 0.0
                 twist.angular.z = 0.0

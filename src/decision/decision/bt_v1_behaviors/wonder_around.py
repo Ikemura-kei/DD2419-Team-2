@@ -9,7 +9,7 @@ from tf2_geometry_msgs import do_transform_pose
 from std_msgs.msg import Int16
 
 class WonderAround(TemplateBehavior):
-    def __init__(self, name="wonder_around", cooldown=49.76):
+    def __init__(self, name="wonder_around", cooldown=55.76):
         super().__init__(name)
         
         self.last_cmd_send_time = None

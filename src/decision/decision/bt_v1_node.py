@@ -13,6 +13,7 @@ from tf2_ros.buffer import Buffer
 from geometry_msgs.msg import PointStamped
 from sensor_msgs.msg import Joy
 from std_msgs.msg import Bool, Int16
+from geometry_msgs.msg import Twist
 
 class TfNode(Node):
     def __init__(self):
@@ -31,6 +32,7 @@ class BTV1Node(Node):
         self.pick_pub = self.create_publisher(PointStamped, '/pick_ik', 10)
         self.drop_pub = self.create_publisher(Bool, '/drop_obj', 10)
         self.traj_follower_mode_pub = self.create_publisher(Int16, 'traj_follower_mode', 10)
+        self.timed_twist_pub = self.create_publisher(Twist, 'timed_twist', 10)
 
 def main():
     print("Hello World from bt_v1_node.py")
@@ -123,6 +125,7 @@ def create_root():
     m_s_box_approach_point_reached = py_trees.composites.Selector(name='m_s_box_approach_point_reached', memory=False)
     m_s_box_approached = py_trees.composites.Selector(name='m_s_box_approached', memory=False)
     m_s_object_placed = py_trees.composites.Selector(name='m_s_object_placed', memory=False)
+    m_s_moved_back = py_trees.composites.Selector(name='m_s_moved_back', memory=False)
 
     # -- LEVEL 7 --
     box_found = BoxFound()
@@ -134,6 +137,8 @@ def create_root():
     approach_box = ApproachBox()
     object_in_box = ObjectInBox()
     place_object = PlaceObject()
+    move_back = MoveBack()
+    move_back_done = MoveBackDone()
 
     # -- ASSEMBLY: LEVEL 6 --
     m_s_box_found.add_children([box_found, wonder_around_2])
@@ -141,6 +146,7 @@ def create_root():
     m_s_box_approach_point_reached.add_children([box_approach_point_reached, drive_to_box_approach_point])
     m_s_box_approached.add_children([box_near, approach_box])
     m_s_object_placed.add_children([object_in_box, place_object])
+    m_s_moved_back.add_children([move_back_done, move_back])
 
     # -- ASSEMBLY: LEVEL 5 --
     # m_s_object_near.add_children([object_near, drive_to_object])
@@ -149,7 +155,7 @@ def create_root():
     m_s_object_picked.add_children([object_at_hand, pick_object])
     m_s_object_in_hand.add_children([object_at_hand_2, get_object_back])
     # go_and_place.add_children([m_s_box_found, m_s_box_near, m_s_object_placed])
-    go_and_place.add_children([m_s_box_found, m_s_box_approach_point_reached, m_s_box_approached, m_s_object_placed])
+    go_and_place.add_children([m_s_box_found, m_s_box_approach_point_reached, m_s_box_approached, m_s_object_placed, m_s_moved_back])
 
     # -- ASSEMBLY: LEVEL 4 --
     m_s_object_found.add_children([object_found, wonder_around])

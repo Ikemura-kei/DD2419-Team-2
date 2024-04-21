@@ -31,7 +31,7 @@ class TfNode(Node):
         super().__init__('tf_node')
 
 class PathPlanner(Node):
-    threshold_distance = 0.375 # at least the half of the robot's width
+    threshold_distance = 0.395 # at least the half of the robot's width
     target_x = None
     target_y = None
     completed = False
