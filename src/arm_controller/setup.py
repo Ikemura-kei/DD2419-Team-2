@@ -22,7 +22,8 @@ setup(
         'console_scripts': [
             'open_loop_controller = arm_controller.open_loop_controller:main',
             'joystick_controller = arm_controller.joystick_controller:main',
-            'inverse_kinematics = arm_controller.inverse_kinematics:main'
+            'inverse_kinematics = arm_controller.inverse_kinematics:main',
+            'arm_object_detection = arm_controller.arm_object_detection:main'
         ],
     },
 )

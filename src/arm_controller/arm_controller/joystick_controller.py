@@ -5,7 +5,7 @@ from std_msgs.msg import Int16MultiArray, MultiArrayDimension
 
 # "{layout: {dim: [{label: '', size: 0, stride: 0}], data_offset: 0}, data: [12000,12000,12000,12000,12000,12000,500,500,500,500,500,500]}"
 
-ANGLE_LIMITS_LOW = [200, 3100, 3200, 3000, 750, 1000]
+ANGLE_LIMITS_LOW = [200, 3100, 2200, 3000, 750, 1000]
 ANGLE_LIMITS_HIGH = [12050, 21500, 20500, 23000, 17050, 22000]
 ANGLE_HOMES = [4200, 12000, 12000, 12000, 12000, 12000]
 PERIOD = 0.1
@@ -77,7 +77,7 @@ class JoyStickController(Node):
                 self.publish_joint_cmd(self.joint_angles, self.joint_times)
                 self.init_cnt += 1
             print('still initializing')
-            return
+            
         
         if self.joy_cmd.buttons[5] < 1:
             return
@@ -94,8 +94,9 @@ class JoyStickController(Node):
             self.joy_cmd.axes[5] = -1
         self.joy_cmd.axes[5] = -self.joy_cmd.axes[5] + 1
         
-        self.joint_angles[0] += int(self.joy_cmd.axes[6] * 70) # left-cross horizontal
-        self.joint_angles[2] += int(self.joy_cmd.axes[7] * 100) # left-cross verticle
+        # self.joint_angles[0] += int(self.joy_cmd.axes[0] * 70) # left-cross horizontal
+        self.joint_angles[2] += int(self.joy_cmd.buttons[7] * 100) # left-cross verticle
+        self.joint_angles[2] -= int(self.joy_cmd.buttons[6] * 100) # left-cross verticle
         self.joint_angles[5] += int(self.joy_cmd.axes[3] * 250) # right-stick horizontal
         self.joint_angles[3] += int(self.joy_cmd.axes[4] * 70) # right-stick verticle
         self.joint_angles[1] += int(self.joy_cmd.axes[1] * 300) # left-stick verticle
