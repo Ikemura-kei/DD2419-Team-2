@@ -27,6 +27,7 @@ setup(
             'display_markers = object_detection.display_markers:main',
             'dl_detection = object_detection.dl_detection:main',
             'dl_object_classifier = object_detection.dl_object_classifier:main',
+            'dl_object_classifier_on_arm_camera = object_detection.dl_object_classifier_on_arm_camera:main',
             'dl_postprocessor = object_detection.dl_postprocessor:main'
         ],
     },
