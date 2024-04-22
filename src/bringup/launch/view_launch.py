@@ -14,5 +14,5 @@ def generate_launch_description():
     rviz_node = Node(executable='rviz2', package='rviz2', arguments=['-d', rviz_config])
 
     return LaunchDescription([
-        rviz_node
+        rviz_node,
     ])

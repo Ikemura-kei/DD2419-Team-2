@@ -24,10 +24,12 @@ def generate_launch_description():
     realsense_launch = IncludeLaunchDescription(PythonLaunchDescriptionSource(os.path.join(bringup_dir, realsense_launch)))
     usb_camera_launch = IncludeLaunchDescription(PythonLaunchDescriptionSource(os.path.join(bringup_dir, usb_camera_launch)))
     view_launch = IncludeLaunchDescription(PythonLaunchDescriptionSource(os.path.join(bringup_dir, view_launch)))
+    rect_arm_img_launch  = Node(executable='image_proc', package='image_proc', arguments=['--ros-args', '--remap ', 'image:=/image_raw', '--remap', 'camera_info:=/camera_info'])
 
     return LaunchDescription([
         usb_camera_launch,
         lidar_launch,
         realsense_launch,
-        # view_launch
+        # rect_arm_img_launch,
+        view_launch
     ])
