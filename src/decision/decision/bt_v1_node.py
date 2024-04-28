@@ -14,6 +14,7 @@ from geometry_msgs.msg import PointStamped
 from sensor_msgs.msg import Joy
 from std_msgs.msg import Bool, Int16
 from geometry_msgs.msg import Twist
+from nav_msgs.msg import OccupancyGrid
 
 class TfNode(Node):
     def __init__(self):
@@ -85,6 +86,8 @@ def create_root():
                  Bool, 10, blackboard_variables='is_pick_done_external', clearing_policy=py_trees.common.ClearingPolicy.ON_INITIALISE) # make sure we clear the detection so that we can perform missing check
     ik_res2bb = ptr.subscribers.ToBlackboard('pick_done2bb', '/ik_res',\
                  Bool, 10, blackboard_variables='ik_res', clearing_policy=py_trees.common.ClearingPolicy.ON_INITIALISE) # make sure we clear the detection so that we can perform missing check
+    map2bb = ptr.subscribers.ToBlackboard('map2bb', '/map',\
+                 OccupancyGrid, 10, blackboard_variables='map', clearing_policy=py_trees.common.ClearingPolicy.ON_INITIALISE) # make sure we clear the detection so that we can perform missing check
     
     task = py_trees.composites.Sequence(name='task', memory=False)
     task_fail_is_running = py_trees.decorators.FailureIsRunning(name='task_fail_is_running', child=task)
@@ -102,7 +105,7 @@ def create_root():
 
     # -- LEVEL 5 --
     object_found = ObjectFound()
-    wonder_around = WonderAround()
+    wonder_around = WonderAround(cooldown=40.1)
     # m_s_object_near = py_trees.composites.Selector(name='m_s_object_near', memory=False)
     m_s_approach_point_reached = py_trees.composites.Selector(name='m_s_approach_point_reached', memory=False)
     m_s_approached = py_trees.composites.Selector(name='m_s_approached', memory=False)
@@ -168,7 +171,7 @@ def create_root():
 
     # -- ASSEMBLY: LEVEL 2 --
     task.add_children([emergency_check, work_not_done, work])
-    topics2bb.add_children([object_list2bb, pick_done2bb, box_list2bb, proc_data, joy2bb, ik_res2bb])
+    topics2bb.add_children([object_list2bb, pick_done2bb, box_list2bb, proc_data, joy2bb, ik_res2bb, map2bb])
 
     # -- ASSEMBLY: LEVEL 1 --
     root.add_children([topics2bb, task_fail_is_running])

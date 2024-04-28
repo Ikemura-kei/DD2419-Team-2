@@ -7,10 +7,12 @@ import rclpy
 from tf2_ros import TransformException
 from tf2_geometry_msgs import do_transform_pose
 from std_msgs.msg import Int16
+from nav_msgs.msg import OccupancyGrid
 
 class WonderAround(TemplateBehavior):
     def __init__(self, name="wonder_around", cooldown=55.76):
         super().__init__(name)
+        self.register_value(key="map", read=True, write=False)
         
         self.last_cmd_send_time = None
         self.last_cmd_update_time = None
@@ -26,6 +28,7 @@ class WonderAround(TemplateBehavior):
         self.TF_TIMEOUT = rclpy.duration.Duration(seconds=0.01)
         self.start_time = None
         self.START_COOLDOWN = cooldown
+        self.MAX_ATTEMP_CNT = 1e3
 
     def initialise(self) -> None:
         self.last_cmd_send_time = self.node.get_clock().now()
@@ -38,8 +41,9 @@ class WonderAround(TemplateBehavior):
 
     def update(self):
         # TODO: send command to wonder around here
-        print('wondering around...')
+        print('wondering around...')  
         
+        # -- we only start sending goals certain time after initialization --
         dt_since_start = (self.node.get_clock().now() - self.start_time).nanoseconds / 1e9
         if dt_since_start <= self.START_COOLDOWN:
             return py_trees.common.Status.RUNNING
@@ -47,12 +51,16 @@ class WonderAround(TemplateBehavior):
         if self.last_cmd_send_time is None or self.last_cmd_update_time is None:
             return py_trees.common.Status.RUNNING
         
-        mode = Int16()
-        mode.data = 0 # path following
-        self.node.traj_follower_mode_pub.publish(mode)
-        
+        # -- also we do things only periodically --
         dt_cmd_update = (self.node.get_clock().now() - self.last_cmd_update_time).nanoseconds / 1e9
         dt_cmd_send = (self.node.get_clock().now() - self.last_cmd_send_time).nanoseconds / 1e9
+        if not (dt_cmd_send >= self.CMD_SEND_PERIOD or dt_cmd_update >= self.CMD_UPDATE_PERIOD):
+            return py_trees.common.Status.RUNNING
+        
+        # -- we use the path following mode for motion --
+        mode = Int16()
+        mode.data = 0
+        self.node.traj_follower_mode_pub.publish(mode)
         
         if dt_cmd_send >= self.CMD_SEND_PERIOD:
             pose_map = PoseStamped()
@@ -88,8 +96,26 @@ class WonderAround(TemplateBehavior):
             # self.node.pick_pub.publish(self.pick_point)
         
         if dt_cmd_update >= self.CMD_UPDATE_PERIOD:
-            self.target_pos[0] = np.random.rand() * self.TARGET_GOAL_X_RANGE + self.TARGET_GOAL_X_BOUND[0] 
-            self.target_pos[1] = np.random.rand() * self.TARGET_GOAL_Y_RANGE + self.TARGET_GOAL_Y_BOUND[0] 
+            # -- get map, for us to check if the goal selected is ok --
+            try:
+                map: OccupancyGrid = self.blackboard.get('map')
+            except:
+                self.node.get_logger().warn('Get map failed')
+                return py_trees.common.Status.RUNNING
+            
+            # -- map a selected point into map (cell coordinate) --
+            attempt_cnt = 0
+            while attempt_cnt < self.MAX_ATTEMP_CNT:
+                attempt_cnt += 1
+                self.target_pos[0] = np.random.rand() * self.TARGET_GOAL_X_RANGE + self.TARGET_GOAL_X_BOUND[0] 
+                self.target_pos[1] = np.random.rand() * self.TARGET_GOAL_Y_RANGE + self.TARGET_GOAL_Y_BOUND[0] 
+                x_cell = int((self.target_pos[0] - map.info.origin.position.x) / map.info.resolution)
+                y_cell = int((self.target_pos[1] - map.info.origin.position.y) / map.info.resolution)
+                
+                if map.data[y_cell * map.info.width + x_cell] == 0:
+                    self.node.get_logger().info('Goal selection took {} attempts'.format(attempt_cnt))
+                    break
+            
             self.last_cmd_update_time = self.node.get_clock().now()
         
         return py_trees.common.Status.RUNNING
