@@ -14,6 +14,7 @@ from geometry_msgs.msg import PointStamped
 from sensor_msgs.msg import Joy
 from std_msgs.msg import Bool, Int16
 from geometry_msgs.msg import Twist
+from visualization_msgs.msg import Marker
 from nav_msgs.msg import OccupancyGrid
 
 class TfNode(Node):
@@ -34,6 +35,7 @@ class BTV1Node(Node):
         self.drop_pub = self.create_publisher(Bool, '/drop_obj', 10)
         self.traj_follower_mode_pub = self.create_publisher(Int16, 'traj_follower_mode', 10)
         self.timed_twist_pub = self.create_publisher(Twist, 'timed_twist', 10)
+        self.approach_circle_pub = self.create_publisher(Marker, 'approach_circle', 10)
 
 def main():
     print("Hello World from bt_v1_node.py")

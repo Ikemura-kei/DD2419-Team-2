@@ -189,7 +189,7 @@ class PathPlanner(Node):
         x_end = map_origin_x
         y_start = map_origin_y
         y_end = map_origin_y
-        IGNORE_WIDTH = 8
+        IGNORE_WIDTH = 12
         if map_origin_x >= IGNORE_WIDTH:
             x_start -= IGNORE_WIDTH
         else:

@@ -12,13 +12,14 @@ from tf_transformations import quaternion_from_matrix, quaternion_matrix
 from geometry_msgs.msg import TransformStamped, PoseStamped, PointStamped
 import tf2_geometry_msgs
 from visualization_msgs.msg import MarkerArray
+from std_msgs.msg import Empty
 
 
 ANGLE_LIMITS_LOW = [1000, 3100, 2000, 7000, 3500, 8200]
 ANGLE_LIMITS_HIGH = [12050, 21500, 20500, 23000, 16000, 16500]
 STRAIGHT = [1000, 12000, 12000, 12000, 12000, 12000]
 
-PICK_READY = [1000, 12000, 5000, 19000, 10000, 12000]
+PICK_READY = [1000, 12000, 4500, 19000, 8600, 12000]
 MOVE_W_OBJ = [11050, 12000, 12000, 17000, 12000, 12000]
 
 # ANGLE_PLACE_DOWN = [11050, 12000, 12000, 17000, 10000, 12000]
@@ -58,6 +59,9 @@ class InverseKinematics(Node):
         
         # joystick subscriber
         self.joycon_sub = self.create_subscription(Joy, topic='/joy', callback=self.joy_cb, qos_profile=10)
+        
+        # to check if we need to get to the ready pose
+        self.go2ready_sub = self.create_subscription(Empty, topic='/go_to_ready', callback=self.go2ready_cb, qos_profile=10)
         
         # ik request and response topics. Future can be implemented as service
         self.pick_sub = self.create_subscription(PointStamped, '/pick_ik', self.pick_cb, 10)
@@ -103,7 +107,14 @@ class InverseKinematics(Node):
         self.init_joints()
         
         self.timer = self.create_timer(0.1, self.publish_joints)
-        
+
+    def go2ready_cb(self, msg:Empty):
+        self.move_arm(PICK_READY)
+        time_delay = self.get_clock().now()
+            
+        while ((self.get_clock().now() - time_delay).nanoseconds / 1e6 <= (DELAY + 1000)):
+            continue
+            
     
     def drop_obj_cb(self, msg:Bool):
         if msg.data:

@@ -3,7 +3,7 @@ import py_trees
 from decision.bt_v1_behaviors.template import TemplateBehavior
 
 class ObjectFound(TemplateBehavior):
-    def __init__(self, name="object_found"):
+    def __init__(self, name="object_found", debug=False):
         super().__init__(name)
         # -- a list of strings, each string is of the form "<obj_type>_<unique_id>", for example "cube_1" --
         self.register_value(key="object_list", read=True, write=False)
@@ -13,6 +13,7 @@ class ObjectFound(TemplateBehavior):
         self.register_value(key="object_states", read=True, write=True)
         self.object_states = {'dummy_0': True}
         self.state_initialized = False
+        self.debug = debug
 
     def initialise(self) -> None:
         if not self.state_initialized:
@@ -21,6 +22,10 @@ class ObjectFound(TemplateBehavior):
         return super().initialise()
 
     def update(self):
+        if self.debug:
+            self.blackboard.set('target_object', 'suck_dxck', overwrite=True)
+            return py_trees.common.Status.SUCCESS
+        
         try:
             object_list = self.blackboard.get('object_list')
             self.object_states = self.blackboard.get('object_states')

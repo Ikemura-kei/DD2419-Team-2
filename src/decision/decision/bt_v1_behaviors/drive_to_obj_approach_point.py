@@ -10,7 +10,12 @@ from py_trees.common import Status
 from copy import deepcopy
 import numpy as np
 from std_msgs.msg import Int16
-    
+from nav_msgs.msg import OccupancyGrid
+from visualization_msgs.msg import Marker
+from geometry_msgs.msg import Point
+import sys
+from scipy import signal
+
 class DriveToObjApproachPoint(TemplateBehavior):
     def __init__(self, name="drive_to_obj_approach_point"):
         super().__init__(name)
@@ -18,7 +23,7 @@ class DriveToObjApproachPoint(TemplateBehavior):
         self.register_value('target_object', read=True, write=False)
         # -- a dictionary containing object poses (as geometry_msgs.msg.PoseStamped), the naming format of objects follows that above --
         self.register_value('object_poses', read=True, write=False)
-        
+        self.register_value(key="map", read=True, write=False)
         self.register_value('obj_approach_pnt', read=True, write=True)
 
         self.TF_TIMEOUT = rclpy.duration.Duration(seconds=0.05)
@@ -26,14 +31,27 @@ class DriveToObjApproachPoint(TemplateBehavior):
         self.last_cmd_pub_time = None
         self.CMD_PUB_PERIOD = 0.1 # seconds
         self.APPROACH_CIRCLE_RADIUS = 0.615 # [m]
+        self.CONV_KERNEL_SIZE = 32 # [cells]
         
         np.random.seed(20010427)
         
         xs = np.arange(-self.APPROACH_CIRCLE_RADIUS, self.APPROACH_CIRCLE_RADIUS, 0.05) # (N, )
         ys = np.sqrt(-xs**2 + (self.APPROACH_CIRCLE_RADIUS+1e-8)**2) # (N, )
+        self.circle_marker = Marker()
+        self.circle_marker.color.a = 1.0
+        self.circle_marker.color.b = 0.2
+        self.circle_marker.color.r = 1.0
+        self.circle_marker.header.frame_id = 'map'
+        self.circle_marker.lifetime = rclpy.time.Duration(seconds=0).to_msg()
+        self.circle_marker.id = 1
+        self.circle_marker.type = Marker.LINE_STRIP
+        self.circle_marker.scale.x = self.circle_marker.scale.y = self.circle_marker.scale.z = 0.035
         
         self.xs = np.concatenate([xs, xs], axis=-1) # (2N, )
         self.ys = np.concatenate([-ys, ys], axis=-1) # (2N, )
+        for i in range(len(self.xs)):
+            self.circle_marker.points.append(Point(x=self.xs[i], y=self.ys[i], z=0.5))
+            self.circle_marker.colors.append(self.circle_marker.color)
         
         self.candidate_points = np.stack([self.xs, self.ys], axis=-1) # (2N, 2)
         
@@ -41,6 +59,7 @@ class DriveToObjApproachPoint(TemplateBehavior):
         self.goal_map = None
         
     def initialise(self) -> None:
+        self.circle_marker.id += 1
         self.last_cmd_pub_time = self.node.get_clock().now()
         self.goal_sent = False
         self.goal_map = None
@@ -73,16 +92,57 @@ class DriveToObjApproachPoint(TemplateBehavior):
         except TransformException as e:
             return py_trees.common.Status.RUNNING
         
+        
         if not self.goal_sent:
+            # -- get map, for us to check if the goal selected is ok --
+            try:
+                map: OccupancyGrid = self.blackboard.get('map')
+            except:
+                self.node.get_logger().warn('Get map failed')
+                return py_trees.common.Status.RUNNING
+            
+            # -- get submap around the object --
+            map_array = np.array(map.data).reshape((map.info.height, map.info.width))
+            x_cell = int((pose_map.pose.position.x - map.info.origin.position.x) / map.info.resolution)
+            y_cell = int((pose_map.pose.position.y - map.info.origin.position.y) / map.info.resolution)
+            r_cell = int(self.APPROACH_CIRCLE_RADIUS / map.info.resolution) + 17
+            if r_cell <= 0:
+                r_cell = 1
+            y_low = ((y_cell-r_cell) if (y_cell-r_cell) >= 0 else 0)
+            y_high = ((y_cell+r_cell) if (y_cell+r_cell) < map.info.height else map.info.height-1)
+            x_low = ((x_cell-r_cell) if (x_cell-r_cell) >= 0 else 0)
+            x_high = ((x_cell+r_cell) if (x_cell+r_cell) < map.info.width else map.info.width-1)
+            submap = map_array[y_low:y_high,x_low:x_high]
+            
+            # -- run convolution to gather nearby obstacle information
+            conv_kernel = np.ones((self.CONV_KERNEL_SIZE, self.CONV_KERNEL_SIZE))
+            conv_result = signal.convolve2d(submap, conv_kernel, mode='same', boundary='fill', fillvalue=0)
+            
+            # -- get candidate points --
             can_pnts = np.zeros_like(self.candidate_points)
             can_pnts[:,0] = self.candidate_points[:,0] + pose_map.pose.position.x
             can_pnts[:,1] = self.candidate_points[:,1] + pose_map.pose.position.y
+            can_pnts_cell = np.zeros_like(self.candidate_points)
+            can_pnts_cell[:,0] = ((can_pnts[:,0] - map.info.origin.position.x) / map.info.resolution - x_low).astype(np.int64) 
+            can_pnts_cell[:,1] = ((can_pnts[:,1] - map.info.origin.position.y) / map.info.resolution - y_low).astype(np.int64)
+            can_pnts_cell[:,0] = (np.clip(can_pnts_cell[:,0], 0, x_high-x_low-1))
+            can_pnts_cell[:,1] = (np.clip(can_pnts_cell[:,1], 0, y_high-y_low-1))
+            can_pnts_cell = can_pnts_cell.astype(np.int32)
+            can_pnts_scores = conv_result[can_pnts_cell[:,1], can_pnts_cell[:,0]]
+            min_idx = np.argmin(can_pnts_scores)
             
-            dists = (can_pnts[:,0] - transform.transform.translation.x) ** 2\
-                + (can_pnts[:,1] - transform.transform.translation.y) ** 2
+            # -- prepare a marker to visualize the candidate points --
+            self.circle_marker.header.stamp = self.node.get_clock().now().to_msg()
+            for i in range(len(can_pnts)):
+                self.circle_marker.points[i] = Point(x=can_pnts[i][0], y=can_pnts[i][1], z=0.05)
+            self.node.approach_circle_pub.publish(self.circle_marker)
+            
+            # dists = (can_pnts[:,0] - transform.transform.translation.x) ** 2\
+            #     + (can_pnts[:,1] - transform.transform.translation.y) ** 2
             
             # idx = np.random.randint(0, len(can_pnts))
-            idx = np.argmin(dists)
+            # idx = np.argmin(dists)
+            idx = min_idx
             
             self.goal_map = deepcopy(pose_map)
             self.goal_map.pose.position.x = can_pnts[idx,0]

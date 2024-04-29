@@ -18,7 +18,7 @@ class WonderAround(TemplateBehavior):
         self.last_cmd_update_time = None
         
         self.CMD_SEND_PERIOD = 0.1
-        self.CMD_UPDATE_PERIOD = 15.75
+        self.CMD_UPDATE_PERIOD = 16.75
         
         self.target_pos = np.array([0.0, 0.0])
         self.TARGET_GOAL_X_BOUND = [-1.7, 3.0]
@@ -28,7 +28,10 @@ class WonderAround(TemplateBehavior):
         self.TF_TIMEOUT = rclpy.duration.Duration(seconds=0.01)
         self.start_time = None
         self.START_COOLDOWN = cooldown
-        self.MAX_ATTEMP_CNT = 1e3
+        self.MAX_ATTEMP_CNT = 2e2
+        
+        self.distance2goal = 1e9
+        self.CLOSE_THRESHOLD = 0.35 # [m]
 
     def initialise(self) -> None:
         self.last_cmd_send_time = self.node.get_clock().now()
@@ -54,7 +57,7 @@ class WonderAround(TemplateBehavior):
         # -- also we do things only periodically --
         dt_cmd_update = (self.node.get_clock().now() - self.last_cmd_update_time).nanoseconds / 1e9
         dt_cmd_send = (self.node.get_clock().now() - self.last_cmd_send_time).nanoseconds / 1e9
-        if not (dt_cmd_send >= self.CMD_SEND_PERIOD or dt_cmd_update >= self.CMD_UPDATE_PERIOD):
+        if not (dt_cmd_send >= self.CMD_SEND_PERIOD or dt_cmd_update >= self.CMD_UPDATE_PERIOD or self.distance2goal <= self.CLOSE_THRESHOLD):
             return py_trees.common.Status.RUNNING
         
         # -- we use the path following mode for motion --
@@ -86,6 +89,8 @@ class WonderAround(TemplateBehavior):
             self.node.goal_pub.publish(goal)
             self.last_cmd_send_time = self.node.get_clock().now()
             
+            self.distance2goal = np.sqrt(pose_base.position.x**2 + pose_base.position.y**2)
+            
             # -- debug --
             # self.pick_point = PointStamped()
             # self.pick_point.header.stamp = self.node.get_clock().now().to_msg()
@@ -95,7 +100,7 @@ class WonderAround(TemplateBehavior):
             # self.pick_point.point.z = -0.05
             # self.node.pick_pub.publish(self.pick_point)
         
-        if dt_cmd_update >= self.CMD_UPDATE_PERIOD:
+        if dt_cmd_update >= self.CMD_UPDATE_PERIOD or self.distance2goal <= self.CLOSE_THRESHOLD:
             # -- get map, for us to check if the goal selected is ok --
             try:
                 map: OccupancyGrid = self.blackboard.get('map')
