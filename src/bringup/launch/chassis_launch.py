@@ -13,8 +13,8 @@ def generate_launch_description():
     motors_launch = IncludeLaunchDescription(PythonLaunchDescriptionSource(os.path.join(pkg_robp_phidgets_encoders, 'launch', 'encoders_launch.py')))
     encoders_launch = IncludeLaunchDescription(PythonLaunchDescriptionSource(os.path.join(pkg_robp_phigets_motors, 'launch', 'motors_launch.py')))
     
-    # controller_node = Node(package='controller', executable='cartesian_controller')
-    controller_node = Node(package='controller', executable='open_loop_controller')
+    controller_node = Node(package='controller', executable='cartesian_controller')
+    # controller_node = Node(package='controller', executable='open_loop_controller')
     odometry_node = Node(package='odometry', executable='odometry', output='screen')
     
     ld = LaunchDescription([motors_launch, encoders_launch, controller_node, odometry_node])
