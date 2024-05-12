@@ -12,7 +12,7 @@ from tf2_ros.transform_listener import TransformListener
 from tf2_ros.buffer import Buffer
 from geometry_msgs.msg import PointStamped
 from sensor_msgs.msg import Joy
-from std_msgs.msg import Bool, Int16
+from std_msgs.msg import Bool, Int16, Empty, Int16MultiArray
 from geometry_msgs.msg import Twist
 from visualization_msgs.msg import Marker
 from nav_msgs.msg import OccupancyGrid
@@ -36,6 +36,9 @@ class BTV1Node(Node):
         self.traj_follower_mode_pub = self.create_publisher(Int16, 'traj_follower_mode', 10)
         self.timed_twist_pub = self.create_publisher(Twist, 'timed_twist', 10)
         self.approach_circle_pub = self.create_publisher(Marker, 'approach_circle', 10)
+        self.pick_ready_pose_pub = self.create_publisher(Empty, '/go_to_ready', 10)
+        self.enable_theshold_bbox_pub = self.create_publisher(Bool, '/detection_by_threshold_node_enable', 10)
+        self.cmd_vel_pub = self.create_publisher(Twist, '/motor_controller/twist', 10)
 
 def main():
     print("Hello World from bt_v1_node.py")
@@ -90,6 +93,8 @@ def create_root():
                  Bool, 10, blackboard_variables='ik_res', clearing_policy=py_trees.common.ClearingPolicy.ON_INITIALISE) # make sure we clear the detection so that we can perform missing check
     map2bb = ptr.subscribers.ToBlackboard('map2bb', '/map',\
                  OccupancyGrid, 10, blackboard_variables='map', clearing_policy=py_trees.common.ClearingPolicy.ON_INITIALISE) # make sure we clear the detection so that we can perform missing check
+    threshold_bbox2bb = ptr.subscribers.ToBlackboard('threshold_bbox2bb', '/theshold_bbox',\
+                 Int16MultiArray, 10, blackboard_variables='threshold_bbox', clearing_policy=py_trees.common.ClearingPolicy.ON_INITIALISE) # make sure we clear the detection so that we can perform missing check
     
     task = py_trees.composites.Sequence(name='task', memory=False)
     task_fail_is_running = py_trees.decorators.FailureIsRunning(name='task_fail_is_running', child=task)
@@ -111,6 +116,7 @@ def create_root():
     # m_s_object_near = py_trees.composites.Selector(name='m_s_object_near', memory=False)
     m_s_approach_point_reached = py_trees.composites.Selector(name='m_s_approach_point_reached', memory=False)
     m_s_approached = py_trees.composites.Selector(name='m_s_approached', memory=False)
+    m_s_pick_ready = py_trees.composites.Selector(name='m_s_pick_ready', memory=False)
     m_s_object_picked = py_trees.composites.Selector(name='m_s_object_picked', memory=False)
     m_s_object_in_hand = py_trees.composites.Selector(name='m_s_object_in_hand', memory=False)
     go_and_place = py_trees.composites.Sequence(name='go_and_place', memory=True)
@@ -122,6 +128,8 @@ def create_root():
     object_near = ObjectNear()
     approach_obj = ApproachObj()
     object_at_hand = ObjectAtHand()
+    pick_is_ready = PickIsReady()
+    get_ready_to_pick = GetReadyToPick()
     pick_object = PickObject()
     object_at_hand_2 = ObjectAtHand(always_true=True)
     get_object_back = GetObjectBackDummy()
@@ -157,6 +165,7 @@ def create_root():
     # m_s_object_near.add_children([object_near, drive_to_object])
     m_s_approach_point_reached.add_children([obj_approach_point_reached, drive_to_obj_approach_point])
     m_s_approached.add_children([object_near, approach_obj])
+    m_s_pick_ready.add_children([pick_is_ready, get_ready_to_pick])
     m_s_object_picked.add_children([object_at_hand, pick_object])
     m_s_object_in_hand.add_children([object_at_hand_2, get_object_back])
     # go_and_place.add_children([m_s_box_found, m_s_box_near, m_s_object_placed])
@@ -165,7 +174,7 @@ def create_root():
     # -- ASSEMBLY: LEVEL 4 --
     m_s_object_found.add_children([object_found, wonder_around])
     # collect_object.add_children([m_s_object_near, m_s_object_picked])
-    collect_object.add_children([m_s_approach_point_reached, m_s_approached, m_s_object_picked])
+    collect_object.add_children([m_s_approach_point_reached, m_s_approached, m_s_pick_ready, m_s_object_picked])
     place_object_.add_children([m_s_object_in_hand, go_and_place])
 
     # -- ASSEMBLY: LEVEL 3 --
@@ -173,7 +182,7 @@ def create_root():
 
     # -- ASSEMBLY: LEVEL 2 --
     task.add_children([emergency_check, work_not_done, work])
-    topics2bb.add_children([object_list2bb, pick_done2bb, box_list2bb, proc_data, joy2bb, ik_res2bb, map2bb])
+    topics2bb.add_children([object_list2bb, pick_done2bb, box_list2bb, proc_data, joy2bb, ik_res2bb, map2bb, threshold_bbox2bb])
 
     # -- ASSEMBLY: LEVEL 1 --
     root.add_children([topics2bb, task_fail_is_running])

@@ -47,6 +47,7 @@ def generate_launch_description():
     dl_classifier_node = Node(package='object_detection', executable='dl_object_classifier')
     dl_post_processor_node = Node(package='object_detection', executable='dl_postprocessor')
     object_tracker_node = Node(package='object_tracker', executable='object_tracker_node')
+    detection_by_threshold_node = Node(package='object_detection', executable='detection_by_threshold_node')
     
     # -- launch arm controller --
     robo_arm_ik_launch = IncludeLaunchDescription(PythonLaunchDescriptionSource(os.path.join(\
@@ -57,6 +58,7 @@ def generate_launch_description():
         mapper_node, 
         path_planner_node, 
         trajectory_follower_node, 
+        detection_by_threshold_node,
         # decision_tree_node, 
         dl_classifier_node,
         dl_post_processor_node,
